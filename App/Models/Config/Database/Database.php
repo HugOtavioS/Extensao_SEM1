@@ -81,7 +81,7 @@ class Database implements DatabaseInterface {
         if ($order !== null) {
             $sql .= " ORDER BY $order";
         }
-        echo $sql;
+
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
         $result = $stmt->fetchAll(PDO::FETCH_ASSOC);

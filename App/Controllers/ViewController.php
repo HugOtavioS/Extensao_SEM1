@@ -14,7 +14,7 @@ class ViewController implements ControllerInterface {
 
         $this->createParams($params);
 
-        require_once __DIR__ . "/../../app/Views/{$view}.php";
+        require_once __DIR__ . "../../Views/{$view}.php";
 
     }
 

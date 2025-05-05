@@ -20,7 +20,7 @@ class Router {
     }
 
     public function registerRoutes ():void {
-        require __DIR__ . "../web.php";
+        require "web.php";
         $this->routeExecute->executeActionController(self::$routes);
         // $this->executeActionController();
     }

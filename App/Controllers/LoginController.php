@@ -23,6 +23,7 @@ class LoginController implements ControllerInterface {
     public function index(...$args) {
 
         $this->view->load("login", ["title" => "Login"]);
+        // print_r($this->db->read("tb_admin", ["*"]));
 
     }
 
