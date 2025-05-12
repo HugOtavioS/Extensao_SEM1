@@ -61,12 +61,54 @@ class Database implements DatabaseInterface {
         return $result;
     }
 
-    public function update(array $data, string $table): bool {
+    public function update(array $data, string $table, ?string $where = null): bool {
 
+        $stmt = $this->connect();
+        
+        // Construir a parte SET da consulta no formato "coluna1 = 'valor1', coluna2 = 'valor2'"
+        $setStatements = [];
+        foreach ($data as $key => $value) {
+            // Escapar os valores para evitar injeção SQL
+            $escapedValue = is_null($value) ? "NULL" : "'" . $value . "'";
+            $setStatements[] = "$key = $escapedValue";
+        }
+        
+        $setClause = implode(", ", $setStatements);
+        $sql = "UPDATE $table SET $setClause";
+        
+        if ($where !== null) {
+            $sql .= " WHERE $where";
+        }
+        
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $result = $stmt->execute();
+            
+            // Para depuração, podemos registrar a consulta SQL
+            // error_log("SQL Update Query: $sql");
+            
+            return $result;
+        } catch (PDOException $e) {
+            // Registrar o erro e lançar novamente a exceção
+            error_log("Erro ao executar update: " . $e->getMessage() . " - SQL: $sql");
+            throw $e;
+        }
     }
 
     public function delete(string $table, int $id): bool {
-
+        $stmt = $this->connect();
+        $sql = "DELETE FROM $table WHERE id = :id";
+        
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+            $result = $stmt->execute();
+            
+            return $result;
+        } catch (PDOException $e) {
+            error_log("Erro ao executar delete: " . $e->getMessage() . " - SQL: $sql");
+            throw $e;
+        }
     }
 
     public function read(string $table, array $columns, ?string $where = null, ?string $order = null): array {

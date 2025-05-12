@@ -42,6 +42,13 @@ class LoginController implements ControllerInterface {
 
             Request::redirect("/");
 
+        } else if(count($this->db->read("tb_admins",["*"], "nome = '$funcionario' and senha = '$senha'")) > 0) {
+            if (!Session::get("user")) {
+                Session::set("user", "$funcionario admin");
+            }
+
+            Request::redirect("/");
+
         } else {
             Request::redirect("/login?error=0");
         }
