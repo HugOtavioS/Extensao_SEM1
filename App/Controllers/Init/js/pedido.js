@@ -30,7 +30,7 @@ function inicializarQuantidades() {
         const id = element.id.replace('quantidade-', '');
         produtoQuantidades[id] = 0;
         element.innerText = '0';
-    });
+});
 }
 
 // Função para carregar preços dos produtos
@@ -503,8 +503,8 @@ function atualizarTotal() {
     
     Object.keys(produtoQuantidades).forEach(id => {
         if (produtoQuantidades[id] > 0) {
-            const quantidade = produtoQuantidades[id];
-            const preco = precoProdutos[id] || 0;
+        const quantidade = produtoQuantidades[id];
+        const preco = precoProdutos[id] || 0;
             
             // Adicionar ao total
             const subtotal = quantidade * preco;

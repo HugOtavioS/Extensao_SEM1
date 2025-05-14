@@ -64,7 +64,7 @@ class Database implements DatabaseInterface {
     public function update(array $data, string $table, ?string $where = null): bool {
 
         $stmt = $this->connect();
-        
+
         // Construir a parte SET da consulta no formato "coluna1 = 'valor1', coluna2 = 'valor2'"
         $setStatements = [];
         foreach ($data as $key => $value) {
@@ -81,13 +81,13 @@ class Database implements DatabaseInterface {
         }
         
         try {
-            $stmt = $this->pdo->prepare($sql);
-            $result = $stmt->execute();
+        $stmt = $this->pdo->prepare($sql);
+        $result = $stmt->execute();
             
             // Para depuração, podemos registrar a consulta SQL
             // error_log("SQL Update Query: $sql");
-            
-            return $result;
+
+        return $result; 
         } catch (PDOException $e) {
             // Registrar o erro e lançar novamente a exceção
             error_log("Erro ao executar update: " . $e->getMessage() . " - SQL: $sql");

@@ -267,13 +267,11 @@ $vendasPorStatus = array_map('intval', $vendasPorStatus);
         theme: {
             extend: {
                 colors: {
-                    primary: '#FF6B35',
-                    'primary-dark': '#E85A2A',
+                    primary: '#22c55e',           // Verde principal (ex: green-500)
+                    'primary-dark': '#16a34a',    // Verde escuro (ex: green-600)
                     secondary: '#2EC4B6',
                     'secondary-dark': '#20AEA1',
-                    accent: '#FFBF69',
-                    'text-dark': '#333F48',
-                    'text-light': '#6B7280',
+                    accent: '#bbf7d0',            // Verde claro (ex: green-100)
                     background: '#F9F7F3',
                     danger: '#E53935',
                     'danger-dark': '#D32F2F',

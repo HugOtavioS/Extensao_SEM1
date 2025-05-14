@@ -19,13 +19,11 @@ Session::init();
             theme: {
                 extend: {
                     colors: {
-                        primary: '#FF6B35',
-                        'primary-dark': '#E85A2A',
+                        primary: '#22c55e',           // Verde principal (ex: green-500)
+                        'primary-dark': '#16a34a',    // Verde escuro (ex: green-600)
                         secondary: '#2EC4B6',
                         'secondary-dark': '#20AEA1',
-                        accent: '#FFBF69',
-                        'text-dark': '#333F48',
-                        'text-light': '#6B7280',
+                        accent: '#bbf7d0',            // Verde claro (ex: green-100)
                         background: '#F9F7F3',
                         danger: '#E53935',
                         'danger-dark': '#D32F2F',
@@ -57,7 +55,7 @@ Session::init();
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                 </svg>
             </div>
-            <h1 class="text-4xl font-bold text-text-dark mb-4">Bem-vindo ao FoodOrder</h1>
+            <h1 class="text-4xl font-bold text-text-dark mb-4">Bem-vindo ao Serve</h1>
             <p class="text-xl text-text-light mb-8">Sistema de gerenciamento de pedidos para bares e restaurantes</p>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
