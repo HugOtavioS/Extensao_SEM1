@@ -23,6 +23,7 @@
             <div class="hidden md:flex space-x-4">
                 <a href="/" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Início</a>
                 <a href="/pedidos" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Lista de Pedidos</a>
+                <a href="/mapa-coleta" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Pontos de Coleta</a>
                 <a href="/sair" class="bg-[#E53935] hover:bg-[#D32F2F] text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">Sair</a>
             </div>
         </div>
@@ -33,6 +34,7 @@
         <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t">
             <a href="/" class="block text-[#333F48] hover:text-[#22c55e] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Início</a>
             <a href="/pedidos" class="block text-[#333F48] hover:text-[#22c55e] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Lista de Pedidos</a>
+            <a href="/mapa-coleta" class="block text-[#333F48] hover:text-[#22c55e] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Pontos de Coleta</a>
             <a href="/sair" class="block text-white bg-[#E53935] hover:bg-[#D32F2F] px-3 py-2 rounded-md text-base font-medium mt-2 transition-colors">Sair</a>
         </div>
     </div>

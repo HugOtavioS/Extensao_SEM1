@@ -21,7 +21,9 @@
             
             <!-- Desktop menu -->
             <div class="hidden md:flex space-x-4">
-                <a href="/" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Home</a>
+                <a href="/" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Início</a>
+                <a href="/pedidos" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Lista de Pedidos</a>
+                <a href="/mapa-coleta" class="text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-sm font-medium">Pontos de Coleta</a>
                 <a href="/login" class="bg-[#22c55e] hover:bg-[#E85A2A] text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">Login</a>
             </div>
         </div>
@@ -30,7 +32,9 @@
     <!-- Mobile menu, show/hide based on menu state -->
     <div id="navMenuInit" class="hidden md:hidden">
         <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t">
-            <a href="/" class="block text-[#333F48] hover:text-[#22c55e] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Home</a>
+            <a href="/" class="block text-[#333F48] hover:text-[#22c55e] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Início</a>
+            <a href="/pedidos" class="block text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-base font-medium">Lista de Pedidos</a>
+            <a href="/mapa-coleta" class="block text-[#333F48] hover:text-[#22c55e] px-3 py-2 rounded-md text-base font-medium">Pontos de Coleta</a>
             <a href="/login" class="block text-white bg-[#22c55e] hover:bg-[#E85A2A] px-3 py-2 rounded-md text-base font-medium mt-2 transition-colors">Login</a>
         </div>
     </div>

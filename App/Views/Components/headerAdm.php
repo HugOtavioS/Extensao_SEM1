@@ -25,6 +25,7 @@
                 <a href="/" class="text-[#333F48] hover:text-[#FF6B35] px-3 py-2 rounded-md text-sm font-medium">Início</a>
                 <a href="/pedidos/dashboard" class="text-[#333F48] hover:text-[#FF6B35] px-3 py-2 rounded-md text-sm font-medium">Dashboard</a>
                 <a href="/pedidos" class="text-[#333F48] hover:text-[#FF6B35] px-3 py-2 rounded-md text-sm font-medium">Lista de Pedidos</a>
+                <a href="/mapa-coleta" class="text-[#333F48] hover:text-[#FF6B35] px-3 py-2 rounded-md text-sm font-medium">Pontos de Coleta</a>
                 <a href="/sair" class="bg-[#E53935] hover:bg-[#D32F2F] text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">Sair</a>
             </div>
         </div>
@@ -37,6 +38,7 @@
             <a href="/" class="block text-[#333F48] hover:text-[#FF6B35] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Início</a>
             <a href="/pedidos/dashboard" class="block text-[#333F48] hover:text-[#FF6B35] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Dashboard</a>
             <a href="/pedidos" class="block text-[#333F48] hover:text-[#FF6B35] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Lista de Pedidos</a>
+            <a href="/mapa-coleta" class="block text-[#333F48] hover:text-[#FF6B35] hover:bg-gray-50 px-3 py-2 rounded-md text-base font-medium">Pontos de Coleta</a>
             <a href="/sair" class="block text-white bg-[#E53935] hover:bg-[#D32F2F] px-3 py-2 rounded-md text-base font-medium mt-2 transition-colors">Sair</a>
         </div>
     </div>

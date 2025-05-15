@@ -143,9 +143,17 @@ function toggleEditField(field) {
             } else if (field === 'Status') {
                 const statusAtual = document.getElementById('detalhesStatus').textContent.toLowerCase();
                 document.getElementById('editStatus').value = statusAtual;
+                // Atualizar também o texto exibido no dropdown personalizado
+                if (document.getElementById('currentStatusText')) {
+                    document.getElementById('currentStatusText').textContent = document.getElementById('detalhesStatus').textContent;
+                }
             } else if (field === 'Pago') {
                 const pagoAtual = document.getElementById('detalhesPago').textContent === 'Pago' ? '1' : '0';
                 document.getElementById('editPago').value = pagoAtual;
+                // Atualizar também o texto exibido no dropdown personalizado
+                if (document.getElementById('currentPagoText')) {
+                    document.getElementById('currentPagoText').textContent = document.getElementById('detalhesPago').textContent;
+                }
             }
         }
     }
