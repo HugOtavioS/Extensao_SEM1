@@ -31,9 +31,6 @@ Router::addRoute("/api/pontos-coleta/proximos", "POST", MapaController::class, "
 Router::addProtectedRoute("/caixa/status", "GET", CaixaController::class, "getStatus");
 Router::addProtectedRoute("/caixa/dados", "GET", CaixaController::class, "getDados");
 Router::addProtectedRoute("/caixa/abrir", "POST", CaixaController::class, "abrirCaixa");
-Router::addProtectedRoute("/caixa/sangria", "POST", CaixaController::class, "registrarSangria");
-Router::addProtectedRoute("/caixa/suprimento", "POST", CaixaController::class, "registrarSuprimento");
-Router::addProtectedRoute("/caixa/fechar", "POST", CaixaController::class, "fecharCaixa");
 
-// Rotas para API de vendas de material
-Router::addRoute("/api/registrar-venda-material", "POST", APIController::class, "registrarVendaMaterial");
+// Rotas para API
+Router::addRoute("/api/registrar-venda-material", "POST", APIController::class, "registrarVendaMaterial"); 

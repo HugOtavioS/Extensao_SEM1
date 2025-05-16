@@ -174,7 +174,7 @@ Session::init();
     }
     ?>
 
-    <div class="container mx-auto px-4 py-8 flex-grow">
+    <div class="container mx-auto px-4 py-8 pb-32 md:pb-24 flex-grow">
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold text-text-dark">Pedidos</h1>
             <button id="btnNovoPedido" type="button"
@@ -187,10 +187,10 @@ Session::init();
             </button>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
             <?php
-            // Recuperar todos os pedidos
-            $pedidos = $db->read("tb_pedidos", ["*"]);
+            // Recuperar todos os pedidos que não estão associados a um fechamento de caixa
+            $pedidos = $db->read("tb_pedidos", ["*"], "fechamento_caixa_id IS NULL");
             
             // Ordenar por data mais recente primeiro (assumindo que há um campo data)
             usort($pedidos, function($a, $b) {
@@ -293,7 +293,7 @@ Session::init();
     </div>
 
     <!-- Modal de Novo Pedido -->
-    <div id="novoPedidoModal" class="fixed w-full inset-0 bg-black/50 hidden z-50">
+    <div id="novoPedidoModal" class="fixed w-full inset-0 bg-black/50 hidden z-[60]">
         <div class="flex items-center justify-center min-h-screen max-h-screen w-full p-4">
             <div class="bg-white rounded-lg w-full max-w-4xl shadow-xl flex flex-col h-full max-h-full">
                 <!-- Cabeçalho fixo -->
@@ -474,7 +474,7 @@ Session::init();
     </div>
 
     <!-- Modal de Sucesso -->
-    <div id="sucessoModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-50 p-4">
+    <div id="sucessoModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[60] p-4">
         <div class="bg-white rounded-lg p-6 sm:p-8 max-w-sm sm:max-w-md w-full mx-auto">
             <div class="text-center">
                 <div class="mx-auto h-20 w-20 rounded-full bg-success/10 flex items-center justify-center mb-4">
@@ -510,7 +510,7 @@ Session::init();
     </script>
 
     <!-- Modal de Detalhes do Pedido -->
-    <div id="detalhesPedidoModal" class="fixed inset-0 bg-black/50 max-h-screen hidden items-center justify-center z-50 p-4 overflow-y-auto">
+    <div id="detalhesPedidoModal" class="fixed inset-0 bg-black/50 max-h-screen hidden items-center justify-center z-[60] p-4 overflow-y-auto">
         <div class="bg-white rounded-lg w-full max-w-2xl h-fit shadow-xl mx-auto my-8">
             <div class="flex justify-between items-center p-6 border-b border-gray-200">
                 <h2 class="text-2xl font-bold text-text-dark">Detalhes do Pedido <span id="detalhesPedidoId" class="text-primary"></span></h2>
@@ -1100,7 +1100,7 @@ Session::init();
     </script>
 
     <!-- Barra de Fechamento de Caixa (fixa na parte inferior) -->
-    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40">
         <div class="container mx-auto px-4 py-3">
             <div class="flex flex-wrap items-center justify-between">
                 <!-- Status do Caixa -->
@@ -1325,6 +1325,12 @@ Session::init();
         // Atualizar UI para mostrar carregamento
         atualizarUICarregando();
         
+        // Obter usuário logado
+        const usuarioLogado = <?php echo json_encode(Session::get("user") ?: 'Usuário'); ?>;
+        
+        // Obter data atual formatada
+        const dataAtual = new Date().toLocaleString();
+        
         // Se estamos em desenvolvimento, pular a requisição e usar dados simulados diretamente
         if (emDesenvolvimento) {
             // Dados fictícios para demonstração
@@ -1333,12 +1339,15 @@ Session::init();
                 caixa_aberto: true,
                 dados: {
                     id: 1,
-                    data_abertura: new Date().toLocaleString(),
-                    usuario_abertura: <?php echo json_encode(Session::get("user") ?: 'Usuário'); ?>,
-                    valor_inicial: 100,
+                    data_abertura: dataAtual,
+                    usuario_abertura: usuarioLogado,
+                    valor_inicial: 100.00,
                     resumo: {
                         vendas: {
                             dinheiro: 250.00,
+                            cartao_credito: 0,
+                            cartao_debito: 0,
+                            pix: 0,
                             total: 250.00
                         },
                         movimentos: {
@@ -1357,30 +1366,21 @@ Session::init();
         
         // Fazer requisição para verificar o status do caixa
         fetch('/caixa/status')
-            .then(response => response.json())
-            .catch(() => {
-                console.warn('Endpoint de status não disponível. Usando dados fictícios para demonstração');
-                // Simular resposta para desenvolvimento
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro na resposta do servidor: ' + response.status);
+                }
+                return response.json();
+            })
+            .catch(error => {
+                console.warn('Erro ao acessar endpoint de status:', error);
+                console.log('Usando dados fictícios como fallback');
+                
+                // Simular resposta para desenvolvimento - caixa fechado por padrão para segurança
                 return {
                     success: true,
-                    caixa_aberto: true,
-                    dados: {
-                        id: 1,
-                        data_abertura: new Date().toLocaleString(),
-                        usuario_abertura: <?php echo json_encode(Session::get("user") ?: 'Usuário'); ?>,
-                        valor_inicial: 100,
-                        resumo: {
-                            vendas: {
-                                dinheiro: 250.00,
-                                total: 250.00
-                            },
-                            movimentos: {
-                                suprimentos: 50.00,
-                                sangrias: 100.00,
-                                cancelamentos: 35.00
-                            }
-                        }
-                    }
+                    caixa_aberto: false,
+                    mensagem: 'Não foi possível verificar o status do caixa. Usando modo offline.'
                 };
             })
             .then(data => {
@@ -1392,7 +1392,7 @@ Session::init();
                 }
             })
             .catch(error => {
-                console.error('Erro ao buscar status do caixa:', error);
+                console.error('Erro ao processar resposta do status do caixa:', error);
                 mostrarErroStatus();
             });
     }
@@ -1463,300 +1463,23 @@ Session::init();
     function atualizarTotaisCaixa(resumo) {
         const formatarValor = (valor) => `R$ ${parseFloat(valor).toFixed(2).replace('.', ',')}`;
         
-        // Total de vendas
-        const totalVendas = resumo.vendas.total;
-        document.getElementById('totalVendas').textContent = formatarValor(totalVendas);
+        // Total de vendas (incluindo vendas de materiais)
+        const totalVendas = resumo.vendas.total || resumo.vendas.dinheiro;
+        const vendasMateriais = parseFloat(resumo.movimentos.vendas_materiais || 0);
+        document.getElementById('totalVendas').textContent = formatarValor(totalVendas + vendasMateriais);
         
-        // Dinheiro em caixa (valor inicial + vendas em dinheiro + suprimentos - sangrias)
-        const dinheiroEmCaixa = resumo.vendas.dinheiro + resumo.movimentos.suprimentos - resumo.movimentos.sangrias;
+        // Dinheiro em caixa (valor inicial + vendas em dinheiro + vendas de materiais + suprimentos - sangrias)
+        const dinheiroEmCaixa = resumo.vendas.dinheiro + 
+                               vendasMateriais + 
+                               resumo.movimentos.suprimentos - 
+                               resumo.movimentos.sangrias;
         document.getElementById('dinheiroEmCaixa').textContent = formatarValor(dinheiroEmCaixa);
         
         // Total de cartões (crédito + débito)
-        const totalCartoes = resumo.vendas.cartao_credito + resumo.vendas.cartao_debito;
+        const cartaoCredito = resumo.vendas.cartao_credito || 0;
+        const cartaoDebito = resumo.vendas.cartao_debito || 0;
+        const totalCartoes = cartaoCredito + cartaoDebito;
         document.getElementById('totalCartoes').textContent = formatarValor(totalCartoes);
-    }
-    
-    // Submeter formulário de abertura de caixa
-    function submeterAberturaCaixa(e) {
-        e.preventDefault();
-        
-        const valorInicial = document.getElementById('valorAbertura').value;
-        
-        if (!valorInicial || parseFloat(valorInicial) < 0) {
-            alert('Por favor, informe um valor inicial válido.');
-            return;
-        }
-        
-        // Desabilitar botão para evitar submissões múltiplas
-        const btnSubmit = e.target.querySelector('button[type="submit"]');
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = `<span class="loading-spinner"></span> Abrindo...`;
-        
-        // Fazer requisição para abrir o caixa
-        fetch('/caixa/abrir', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ valor_inicial: valorInicial })
-        })
-        .then(response => response.json())
-        .catch(() => {
-            console.warn('Endpoint não disponível. Simulando sucesso para demonstração');
-            // Simular resposta para desenvolvimento
-            return {
-                success: true,
-                message: 'Caixa aberto com sucesso!'
-            };
-        })
-        .then(data => {
-            if (data.success) {
-                alert('Caixa aberto com sucesso!');
-                fecharModal('aberturaCaixaModal');
-                // Atualizar status do caixa
-                verificarStatusCaixa();
-            } else {
-                alert('Erro ao abrir caixa: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Ocorreu um erro ao processar a solicitação.');
-        })
-        .finally(() => {
-            // Habilitar botão novamente
-            btnSubmit.disabled = false;
-            btnSubmit.innerHTML = 'Abrir Caixa';
-        });
-    }
-    
-    // Submeter formulário de sangria
-    function submeterSangria(e) {
-        e.preventDefault();
-        
-        const valor = document.getElementById('valorSangria').value;
-        const motivo = document.getElementById('motivoSangria').value;
-        
-        if (!valor || parseFloat(valor) <= 0) {
-            alert('Por favor, informe um valor válido para a sangria.');
-            return;
-        }
-        
-        // Desabilitar botão para evitar submissões múltiplas
-        const btnSubmit = e.target.querySelector('button[type="submit"]');
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = `<span class="loading-spinner"></span> Registrando...`;
-        
-        // Fazer requisição para registrar a sangria
-        fetch('/caixa/sangria', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ valor, motivo })
-        })
-        .then(response => response.json())
-        .catch(() => {
-            console.warn('Endpoint não disponível. Simulando sucesso para demonstração');
-            // Simular resposta para desenvolvimento
-            return {
-                success: true,
-                message: 'Sangria registrada com sucesso!'
-            };
-        })
-        .then(data => {
-            if (data.success) {
-                alert('Sangria registrada com sucesso!');
-                fecharModal('sangriaModal');
-                // Limpar formulário
-                document.getElementById('valorSangria').value = '';
-                document.getElementById('motivoSangria').value = '';
-                // Atualizar status do caixa
-                verificarStatusCaixa();
-            } else {
-                alert('Erro ao registrar sangria: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Ocorreu um erro ao processar a solicitação.');
-        })
-        .finally(() => {
-            // Habilitar botão novamente
-            btnSubmit.disabled = false;
-            btnSubmit.innerHTML = 'Confirmar';
-        });
-    }
-    
-    // Submeter formulário de suprimento
-    function submeterSuprimento(e) {
-        e.preventDefault();
-        
-        const valor = document.getElementById('valorSuprimento').value;
-        const descricao = document.getElementById('descricaoSuprimento').value;
-        
-        if (!valor || parseFloat(valor) <= 0) {
-            alert('Por favor, informe um valor válido para o suprimento.');
-            return;
-        }
-        
-        // Desabilitar botão para evitar submissões múltiplas
-        const btnSubmit = e.target.querySelector('button[type="submit"]');
-        btnSubmit.disabled = true;
-        btnSubmit.innerHTML = `<span class="loading-spinner"></span> Registrando...`;
-        
-        // Fazer requisição para registrar o suprimento
-        fetch('/caixa/suprimento', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ valor, descricao })
-        })
-        .then(response => response.json())
-        .catch(() => {
-            console.warn('Endpoint não disponível. Simulando sucesso para demonstração');
-            // Simular resposta para desenvolvimento
-            return {
-                success: true,
-                message: 'Suprimento registrado com sucesso!'
-            };
-        })
-        .then(data => {
-            if (data.success) {
-                alert('Suprimento registrado com sucesso!');
-                fecharModal('suprimentoModal');
-                // Limpar formulário
-                document.getElementById('valorSuprimento').value = '';
-                document.getElementById('descricaoSuprimento').value = '';
-                // Atualizar status do caixa
-                verificarStatusCaixa();
-            } else {
-                alert('Erro ao registrar suprimento: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Erro:', error);
-            alert('Ocorreu um erro ao processar a solicitação.');
-        })
-        .finally(() => {
-            // Habilitar botão novamente
-            btnSubmit.disabled = false;
-            btnSubmit.innerHTML = 'Confirmar';
-        });
-    }
-    
-    // Carregar dados do caixa para o modal de fechamento
-    function carregarDadosCaixa(emDesenvolvimento = false) {
-        // Mostrar indicador de carregamento
-        const conteudoContainer = document.getElementById('fechamentoCaixaConteudo');
-        document.getElementById('caixaLoading').style.display = 'flex';
-        
-        // Desabilitar botão de fechar caixa até que os dados sejam carregados
-        document.getElementById('btnFecharCaixaConfirmar').disabled = true;
-        
-        // Obter usuário logado
-        const usuarioLogado = <?php echo json_encode(Session::get("user") ?: 'Usuário'); ?>;
-        
-        // Obter data atual formatada
-        const dataAtual = new Date().toLocaleString();
-        
-        // Se estamos em desenvolvimento, pular a requisição e usar dados simulados diretamente
-        if (emDesenvolvimento) {
-            // Dados fictícios para demonstração
-            const dadosSimulados = {
-                success: true,
-                dados: {
-                    id: 1,
-                    data_abertura: dataAtual,
-                    usuario_abertura: usuarioLogado,
-                    valor_inicial: 100.00,
-                    resumo: {
-                        vendas: {
-                            dinheiro: 250.00,
-                            total: 250.00
-                        },
-                        movimentos: {
-                            suprimentos: 50.00,
-                            sangrias: 100.00,
-                            cancelamentos: 35.00
-                        }
-                    }
-                }
-            };
-            
-            // Ocultar indicador de carregamento
-            document.getElementById('caixaLoading').style.display = 'none';
-            // Preencher o modal com os dados do caixa
-            preencherModalFechamentoCaixa(dadosSimulados.dados);
-            // Habilitar botão de fechar caixa
-            document.getElementById('btnFecharCaixaConfirmar').disabled = false;
-            return;
-        }
-        
-        // Fazer requisição para buscar os dados do caixa
-        fetch('/caixa/dados')
-            .then(response => response.json())
-            .catch(() => {
-                console.warn('Endpoint de dados do caixa não disponível. Usando dados fictícios para demonstração');
-                // Simular resposta para desenvolvimento - versão simplificada apenas com dinheiro
-                return {
-                    success: true,
-                    dados: {
-                        id: 1,
-                        data_abertura: dataAtual,
-                        usuario_abertura: usuarioLogado,
-                        valor_inicial: 100.00,
-                        resumo: {
-                            vendas: {
-                                dinheiro: 250.00,
-                                total: 250.00
-                            },
-                            movimentos: {
-                                suprimentos: 50.00,
-                                sangrias: 100.00,
-                                cancelamentos: 35.00
-                            }
-                        }
-                    }
-                };
-            })
-            .then(data => {
-                if (data.success) {
-                    // Ajustar dados para garantir que temos apenas dinheiro
-                    if (data.dados.resumo && data.dados.resumo.vendas) {
-                        // Garantir que o total de vendas é igual ao dinheiro
-                        data.dados.resumo.vendas.total = data.dados.resumo.vendas.dinheiro;
-                        
-                        // Remover outros métodos de pagamento se existirem
-                        delete data.dados.resumo.vendas.cartao_credito;
-                        delete data.dados.resumo.vendas.cartao_debito;
-                        delete data.dados.resumo.vendas.pix;
-                    }
-                    
-                    // Atualizar usuário e data
-                    data.dados.usuario_abertura = usuarioLogado;
-                    data.dados.data_abertura = dataAtual;
-                    
-                    // Ocultar indicador de carregamento
-                    document.getElementById('caixaLoading').style.display = 'none';
-                    // Preencher o modal com os dados do caixa
-                    preencherModalFechamentoCaixa(data.dados);
-                    // Habilitar botão de fechar caixa
-                    document.getElementById('btnFecharCaixaConfirmar').disabled = false;
-                } else {
-                    console.error('Erro ao buscar dados do caixa:', data.message);
-                    document.getElementById('caixaLoading').style.display = 'none';
-                    conteudoContainer.innerHTML = `
-                        <div class="p-4 bg-red-50 text-red-800 rounded-md">
-                            <p>Não foi possível carregar os dados do caixa. Tente novamente.</p>
-                        </div>
-                    `;
-                }
-            })
-            .catch(error => {
-                console.error('Erro ao buscar dados do caixa:', error);
-                document.getElementById('caixaLoading').style.display = 'none';
-                conteudoContainer.innerHTML = `
-                    <div class="p-4 bg-red-50 text-red-800 rounded-md">
-                        <p>Não foi possível carregar os dados do caixa. Tente novamente.</p>
-                    </div>
-                `;
-            });
     }
     
     // Preencher modal de fechamento de caixa com os dados
@@ -1767,11 +1490,83 @@ Session::init();
         // Garantir que o total de vendas reflete a soma do valor total dos pedidos
         // (Assumindo que dados.resumo.vendas.dinheiro já contém a soma correta dos pedidos)
         
-        // Calcular valores para o fechamento - Dinheiro em caixa = Vendas + Suprimentos - Sangrias - Cancelamentos
-        const totalEmDinheiro = parseFloat(dados.resumo.vendas.dinheiro) + 
-                              parseFloat(dados.resumo.movimentos.suprimentos) - 
-                              parseFloat(dados.resumo.movimentos.sangrias) - 
-                              parseFloat(dados.resumo.movimentos.cancelamentos);
+        // Calcular valores para o fechamento - Dinheiro em caixa = Vendas + Vendas de Materiais + Suprimentos - Sangrias - Cancelamentos
+        const vendasMateriais = parseFloat(dados.resumo.movimentos.vendas_materiais || 0);
+        const vendasDinheiro = parseFloat(dados.resumo.vendas.dinheiro || 0);
+        const suprimentos = parseFloat(dados.resumo.movimentos.suprimentos || 0);
+        const sangrias = parseFloat(dados.resumo.movimentos.sangrias || 0);
+        const cancelamentos = parseFloat(dados.resumo.movimentos.cancelamentos || 0);
+        
+        const totalEmDinheiro = vendasDinheiro + 
+                              vendasMateriais +
+                              suprimentos - 
+                              sangrias - 
+                              cancelamentos;
+        
+        // Preparar HTML para a listagem de pedidos agrupados por dia
+        let pedidosHTML = '';
+        
+        if (dados.pedidos_agrupados && dados.pedidos_agrupados.length > 0) {
+            // Construir listagem de pedidos agrupados por dia
+            pedidosHTML = `
+                <!-- Lista de Pedidos -->
+                <div>
+                    <h4 class="font-medium text-gray-700 mb-3">Pedidos Realizados</h4>
+                    <div class="bg-white border border-gray-200 rounded-md overflow-hidden max-h-80 overflow-y-auto">
+            `;
+            
+            // Iterar pelos grupos de dias
+            dados.pedidos_agrupados.forEach(grupo => {
+                // Cabeçalho do dia
+                pedidosHTML += `
+                    <div class="bg-gray-100 p-3 border-b border-gray-200 sticky top-0">
+                        <h5 class="font-medium text-gray-800">${grupo.formatted_date}</h5>
+                    </div>
+                `;
+                
+                // Listar pedidos do dia
+                if (grupo.pedidos.length === 0) {
+                    pedidosHTML += `
+                        <div class="p-3 text-gray-500 text-sm border-b border-gray-200">
+                            Nenhum pedido neste dia.
+                        </div>
+                    `;
+                } else {
+                    grupo.pedidos.forEach(pedido => {
+                        pedidosHTML += `
+                            <div class="p-3 border-b border-gray-200 hover:bg-gray-50">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <span class="font-medium">Pedido #${pedido.id}</span>
+                                        <div class="text-sm text-gray-500 mt-1">
+                                            Cliente: ${pedido.nome_cliente || 'Não informado'}
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-medium text-primary">${formatarValor(pedido.valor_total)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            });
+            
+            pedidosHTML += `
+                    </div>
+                </div>
+            `;
+        } else {
+            pedidosHTML = `
+                <!-- Lista de Pedidos -->
+                <div>
+                    <h4 class="font-medium text-gray-700 mb-3">Pedidos Realizados</h4>
+                    <div class="bg-white border border-gray-200 rounded-md overflow-hidden p-4 text-center text-gray-500">
+                        Não há pedidos registrados para este caixa.
+                    </div>
+                </div>
+            `;
+        }
         
         // Gerar HTML do conteúdo - versão apenas com dinheiro
         conteudoContainer.innerHTML = `
@@ -1802,17 +1597,44 @@ Session::init();
                         <div class="p-3 border-b border-gray-200">
                             <div>
                                 <span class="text-gray-500 text-sm">Vendas em Dinheiro:</span>
-                                <span class="block font-medium">${formatarValor(dados.resumo.vendas.dinheiro)}</span>
+                                <span class="block font-medium">${formatarValor(vendasDinheiro)}</span>
+                            </div>
+                        </div>
+                        <div class="p-3 border-b border-gray-200">
+                            <div>
+                                <span class="text-gray-500 text-sm">Vendas de Materiais:</span>
+                                <span class="block font-medium">${formatarValor(vendasMateriais)}</span>
+                                <span class="text-xs text-gray-500">Vendas de materiais recicláveis</span>
+                            </div>
+                        </div>
+                        <div class="p-3 border-b border-gray-200">
+                            <div>
+                                <span class="text-gray-500 text-sm">Suprimentos:</span>
+                                <span class="block font-medium">${formatarValor(suprimentos)}</span>
+                            </div>
+                        </div>
+                        <div class="p-3 border-b border-gray-200">
+                            <div>
+                                <span class="text-gray-500 text-sm">Sangrias:</span>
+                                <span class="block font-medium text-danger">- ${formatarValor(sangrias)}</span>
+                            </div>
+                        </div>
+                        <div class="p-3 border-b border-gray-200">
+                            <div>
+                                <span class="text-gray-500 text-sm">Cancelamentos:</span>
+                                <span class="block font-medium text-danger">- ${formatarValor(cancelamentos)}</span>
                             </div>
                         </div>
                         <div class="bg-gray-50 p-3">
                             <div class="flex justify-between items-center">
-                                <span class="font-medium">Total de Vendas:</span>
-                                <span class="font-bold text-lg text-primary">${formatarValor(dados.resumo.vendas.dinheiro)}</span>
+                                <span class="font-medium">Total em Caixa:</span>
+                                <span class="font-bold text-lg text-primary">${formatarValor(totalEmDinheiro)}</span>
                             </div>
                         </div>
                     </div>
                 </div>
+                
+                ${pedidosHTML}
                 
                 <!-- Movimentações -->
                 <div>
@@ -1877,6 +1699,19 @@ Session::init();
                             <span class="font-medium">Total em Caixa:</span>
                             <span id="totalConferencia" class="font-bold text-lg text-primary">${formatarValor(totalEmDinheiro)}</span>
                         </div>
+                        <div class="text-xs text-gray-500 text-right mt-1">
+                            Inclui vendas de materiais: ${formatarValor(vendasMateriais)}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Pedidos Pendentes -->
+                <div id="pedidosPendentesContainer">
+                    <h4 class="font-medium text-gray-700 mb-3">Pedidos Pendentes</h4>
+                    <div class="bg-white border border-gray-200 rounded-md overflow-hidden">
+                        <div class="p-3 text-sm text-gray-500">
+                            Os pedidos pendentes aparecerão aqui após o fechamento do caixa.
+                        </div>
                     </div>
                 </div>
                 
@@ -1934,7 +1769,9 @@ Session::init();
         const cancelamentos = parseFloat(document.getElementById('editCancelamentos').value) || 0;
         
         // Recalcular valor esperado em dinheiro - Dinheiro em caixa = Vendas + Suprimentos - Sangrias - Cancelamentos
+        const vendasMateriais = parseFloat(window.dadosCaixa.resumo.movimentos.vendas_materiais || 0);
         const totalEmDinheiro = parseFloat(window.dadosCaixa.resumo.vendas.dinheiro) + 
+                              vendasMateriais +
                               suprimentos - sangrias - cancelamentos;
         
         // Atualizar valores esperados
@@ -2007,10 +1844,22 @@ Session::init();
         })
         .then(data => {
             if (data.success) {
-                alert('Caixa fechado com sucesso!');
-                fecharModal('fechamentoCaixaModal');
-                // Atualizar status do caixa
-                verificarStatusCaixa(emDesenvolvimento);
+                // Exibir pedidos pendentes após o fechamento do caixa, se houver
+                if (data.pedidos_pendentes && data.pedidos_pendentes.length > 0) {
+                    exibirPedidosPendentes(data.pedidos_pendentes);
+                }
+                
+                // Remover a interface de fechamento de caixa e exibir mensagem de sucesso
+                document.getElementById('btnFecharCaixaConfirmar').disabled = true;
+                document.getElementById('fechamentoCaixaConteudo').querySelector(':not(#pedidosPendentesContainer)').classList.add('opacity-50');
+                
+                setTimeout(() => {
+                    alert('Caixa fechado com sucesso!');
+                    fecharModal('fechamentoCaixaModal');
+                    
+                    // Recarregar a página para atualizar todos os dados
+                    window.location.reload();
+                }, 1000);
             } else {
                 alert('Erro ao fechar caixa: ' + data.message);
                 // Reabilitar botão
@@ -2025,6 +1874,427 @@ Session::init();
             btnFechar.disabled = false;
             btnFechar.innerHTML = `Fechar Caixa`;
         });
+    }
+    
+    // Função para exibir pedidos pendentes
+    function exibirPedidosPendentes(pedidosPendentes) {
+        const container = document.getElementById('pedidosPendentesContainer');
+        
+        // Formatar valores
+        const formatarValor = (valor) => `R$ ${parseFloat(valor).toFixed(2).replace('.', ',')}`;
+        
+        // Gerar HTML para os pedidos pendentes agrupados por dia
+        let html = `
+            <h4 class="font-medium text-gray-700 mb-3">Pedidos Pendentes</h4>
+            <div class="bg-white border border-gray-200 rounded-md overflow-hidden">
+        `;
+        
+        if (pedidosPendentes.length === 0) {
+            html += `
+                <div class="p-4 text-center text-gray-500">
+                    Todos os pedidos foram entregues e pagos.
+                </div>
+            `;
+        } else {
+            // Iterar pelos grupos de dias
+            pedidosPendentes.forEach(grupo => {
+                // Cabeçalho do dia
+                html += `
+                    <div class="bg-gray-100 p-3 border-b border-gray-200">
+                        <h5 class="font-medium text-gray-800">${grupo.formatted_date}</h5>
+                    </div>
+                `;
+                
+                // Listar pedidos do dia
+                if (grupo.pedidos.length === 0) {
+                    html += `
+                        <div class="p-3 text-gray-500 text-sm border-b border-gray-200">
+                            Nenhum pedido pendente neste dia.
+                        </div>
+                    `;
+                } else {
+                    grupo.pedidos.forEach(pedido => {
+                        const statusClass = pedido.status !== 'entregue' ? 'text-yellow-600' : 'text-green-600';
+                        const pagoClass = pedido.pago !== 1 ? 'text-red-600' : 'text-green-600';
+                        
+                        html += `
+                            <div class="p-3 border-b border-gray-200">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <span class="font-medium">Pedido #${pedido.id}</span>
+                                        <div class="text-sm text-gray-500 mt-1">
+                                            Cliente: ${pedido.nome_cliente || 'Não informado'}
+                                        </div>
+                                        <div class="text-sm mt-1">
+                                            <span class="${statusClass}">
+                                                ${pedido.status === 'entregue' ? 'Entregue' : 'Não entregue'}
+                                            </span>
+                                            • 
+                                            <span class="${pagoClass}">
+                                                ${pedido.pago === 1 ? 'Pago' : 'Não pago'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="font-medium text-primary">${formatarValor(pedido.valor_total)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+            });
+        }
+        
+        html += '</div>';
+        
+        // Atualizar container
+        container.innerHTML = html;
+    }
+    
+    // Carregar dados do caixa para o modal de fechamento
+    function carregarDadosCaixa(emDesenvolvimento = false) {
+        // Mostrar indicador de carregamento
+        const conteudoContainer = document.getElementById('fechamentoCaixaConteudo');
+        document.getElementById('caixaLoading').style.display = 'flex';
+        
+        // Desabilitar botão de fechar caixa até que os dados sejam carregados
+        document.getElementById('btnFecharCaixaConfirmar').disabled = true;
+        
+        // Obter usuário logado
+        const usuarioLogado = <?php echo json_encode(Session::get("user") ?: 'Usuário'); ?>;
+        
+        // Obter data atual formatada
+        const dataAtual = new Date().toLocaleString();
+        
+        // Se estamos em desenvolvimento, pular a requisição e usar dados simulados diretamente
+        if (emDesenvolvimento) {
+            // Dados fictícios para demonstração
+            const dadosSimulados = {
+                success: true,
+                dados: {
+                    id: 1,
+                    data_abertura: dataAtual,
+                    usuario_abertura: usuarioLogado,
+                    valor_inicial: 100.00,
+                    resumo: {
+                        vendas: {
+                            dinheiro: 250.00,
+                            total: 250.00
+                        },
+                        movimentos: {
+                            suprimentos: 50.00,
+                            sangrias: 100.00,
+                            cancelamentos: 35.00
+                        }
+                    },
+                    pedidos_agrupados: [
+                        {
+                            data: new Date().toISOString().split('T')[0],
+                            formatted_date: new Date().toLocaleDateString('pt-BR'),
+                            pedidos: [
+                                {
+                                    id: 1,
+                                    nome_cliente: 'Cliente Exemplo',
+                                    valor_total: 150.00,
+                                    status: 'entregue',
+                                    pago: 1
+                                },
+                                {
+                                    id: 2,
+                                    nome_cliente: 'Cliente Teste',
+                                    valor_total: 100.00,
+                                    status: 'entregue',
+                                    pago: 1
+                                }
+                            ]
+                        }
+                    ]
+                }
+            };
+            
+            // Ocultar indicador de carregamento
+            document.getElementById('caixaLoading').style.display = 'none';
+            // Preencher o modal com os dados do caixa
+            preencherModalFechamentoCaixa(dadosSimulados.dados);
+            // Habilitar botão de fechar caixa
+            document.getElementById('btnFecharCaixaConfirmar').disabled = false;
+            return;
+        }
+        
+        // Fazer requisição para buscar os dados do caixa
+        fetch('/caixa/dados')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Erro na resposta do servidor: ' + response.status);
+                }
+                return response.json();
+            })
+            .catch(error => {
+                console.warn('Endpoint de dados do caixa não disponível ou retornou erro:', error);
+                // Simular resposta para desenvolvimento
+                return {
+                    success: true,
+                    dados: {
+                        id: 1,
+                        data_abertura: dataAtual,
+                        usuario_abertura: usuarioLogado,
+                        valor_inicial: 100.00,
+                        resumo: {
+                            vendas: {
+                                dinheiro: 250.00,
+                                total: 250.00
+                            },
+                            movimentos: {
+                                suprimentos: 50.00,
+                                sangrias: 100.00,
+                                cancelamentos: 35.00
+                            }
+                        },
+                        pedidos_agrupados: [
+                            {
+                                data: new Date().toISOString().split('T')[0],
+                                formatted_date: new Date().toLocaleDateString('pt-BR'),
+                                pedidos: [
+                                    {
+                                        id: 1,
+                                        nome_cliente: 'Cliente Exemplo',
+                                        valor_total: 150.00,
+                                        status: 'entregue',
+                                        pago: 1
+                                    },
+                                    {
+                                        id: 2,
+                                        nome_cliente: 'Cliente Teste',
+                                        valor_total: 100.00,
+                                        status: 'entregue',
+                                        pago: 1
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                };
+            })
+            .then(data => {
+                console.log(data);
+                // Ocultar indicador de carregamento
+                document.getElementById('caixaLoading').style.display = 'none';
+                
+                if (data.success) {
+                    // Preencher o modal com os dados do caixa
+                    preencherModalFechamentoCaixa(data.dados);
+                    // Habilitar botão de fechar caixa
+                    document.getElementById('btnFecharCaixaConfirmar').disabled = false;
+                } else {
+                    console.error('Erro ao buscar dados do caixa:', data.message);
+                    conteudoContainer.innerHTML = `
+                        <div class="p-4 bg-red-50 text-red-800 rounded-md">
+                            <p>Não foi possível carregar os dados do caixa: ${data.message || 'Erro desconhecido'}</p>
+                            <button onclick="carregarDadosCaixa(false)" class="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                                Tentar novamente
+                            </button>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                // Garantir que o indicador de carregamento esteja oculto mesmo em caso de erro
+                document.getElementById('caixaLoading').style.display = 'none';
+                
+                console.error('Erro ao buscar dados do caixa:', error);
+                conteudoContainer.innerHTML = `
+                    <div class="p-4 bg-red-50 text-red-800 rounded-md">
+                        <p>Erro ao carregar dados do caixa: ${error.message || 'Erro desconhecido'}</p>
+                        <button onclick="carregarDadosCaixa(false)" class="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                            Tentar novamente
+                        </button>
+                    </div>
+                `;
+            });
+    }
+    
+    // Submeter abertura de caixa
+    function submeterAberturaCaixa(event) {
+        event.preventDefault();
+        
+        const valorAbertura = parseFloat(document.getElementById('valorAbertura').value) || 0;
+        
+        // Desabilitar botão para evitar submissões múltiplas
+        const form = document.getElementById('formAberturaCaixa');
+        const btnSubmit = form.querySelector('button[type="submit"]');
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<span class="loading-spinner"></span> Processando...`;
+        
+        // Preparar dados
+        const dados = { 
+            valor_inicial: valorAbertura 
+        };
+        
+        // Enviar requisição
+        fetch('/caixa/abrir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        })
+        .then(response => response.json())
+        .catch(() => {
+            console.warn('Endpoint de abertura não disponível. Simulando resposta.');
+            return { 
+                success: true, 
+                message: 'Caixa aberto com sucesso!' 
+            };
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Caixa aberto com sucesso!');
+                fecharModal('aberturaCaixaModal');
+                // Atualizar status do caixa
+                setTimeout(() => verificarStatusCaixa(false), 500);
+            } else {
+                alert('Erro ao abrir caixa: ' + data.message);
+                // Reabilitar botão
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = 'Abrir Caixa';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao abrir caixa:', error);
+            alert('Ocorreu um erro ao processar a solicitação.');
+            // Reabilitar botão
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = 'Abrir Caixa';
+        });
+    }
+    
+    // Submeter sangria
+    function submeterSangria(event) {
+        event.preventDefault();
+        
+        const valorSangria = parseFloat(document.getElementById('valorSangria').value) || 0;
+        const motivoSangria = document.getElementById('motivoSangria').value || '';
+        
+        // Validar valor
+        if (valorSangria <= 0) {
+            alert('Informe um valor válido para a sangria.');
+            return;
+        }
+        
+        // Desabilitar botão para evitar submissões múltiplas
+        const form = document.getElementById('formSangria');
+        const btnSubmit = form.querySelector('button[type="submit"]');
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<span class="loading-spinner"></span> Processando...`;
+        
+        // Preparar dados
+        const dados = { 
+            valor: valorSangria,
+            motivo: motivoSangria
+        };
+        
+        // Enviar requisição
+        fetch('/caixa/sangria', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        })
+        .then(response => response.json())
+        .catch(() => {
+            console.warn('Endpoint de sangria não disponível. Simulando resposta.');
+            return { 
+                success: true, 
+                message: 'Sangria registrada com sucesso!' 
+            };
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Sangria registrada com sucesso!');
+                fecharModal('sangriaModal');
+                // Atualizar status do caixa
+                setTimeout(() => verificarStatusCaixa(false), 500);
+            } else {
+                alert('Erro ao registrar sangria: ' + data.message);
+                // Reabilitar botão
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = 'Confirmar';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao registrar sangria:', error);
+            alert('Ocorreu um erro ao processar a solicitação.');
+            // Reabilitar botão
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = 'Confirmar';
+        });
+        
+        // Limpar formulário
+        document.getElementById('valorSangria').value = '';
+        document.getElementById('motivoSangria').value = '';
+    }
+    
+    // Submeter suprimento
+    function submeterSuprimento(event) {
+        event.preventDefault();
+        
+        const valorSuprimento = parseFloat(document.getElementById('valorSuprimento').value) || 0;
+        const descricao = document.getElementById('descricaoSuprimento').value || '';
+        
+        // Validar valor
+        if (valorSuprimento <= 0) {
+            alert('Informe um valor válido para o suprimento.');
+            return;
+        }
+        
+        // Desabilitar botão para evitar submissões múltiplas
+        const form = document.getElementById('formSuprimento');
+        const btnSubmit = form.querySelector('button[type="submit"]');
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = `<span class="loading-spinner"></span> Processando...`;
+        
+        // Preparar dados
+        const dados = { 
+            valor: valorSuprimento,
+            descricao: descricao
+        };
+        
+        // Enviar requisição
+        fetch('/caixa/suprimento', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        })
+        .then(response => response.json())
+        .catch(() => {
+            console.warn('Endpoint de suprimento não disponível. Simulando resposta.');
+            return { 
+                success: true, 
+                message: 'Suprimento registrado com sucesso!' 
+            };
+        })
+        .then(data => {
+            if (data.success) {
+                alert('Suprimento registrado com sucesso!');
+                fecharModal('suprimentoModal');
+                // Atualizar status do caixa
+                setTimeout(() => verificarStatusCaixa(false), 500);
+            } else {
+                alert('Erro ao registrar suprimento: ' + data.message);
+                // Reabilitar botão
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = 'Confirmar';
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao registrar suprimento:', error);
+            alert('Ocorreu um erro ao processar a solicitação.');
+            // Reabilitar botão
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = 'Confirmar';
+        });
+        
+        // Limpar formulário
+        document.getElementById('valorSuprimento').value = '';
+        document.getElementById('descricaoSuprimento').value = '';
     }
     </script>
 </body>

@@ -639,6 +639,503 @@ $vendasPorStatus = array_map('intval', $vendasPorStatus);
                 </table>
             </div>
         </div>
+
+        <!-- Seção de Gerenciamento de Caixa -->
+        <div class="border-t-2 border-gray-200 pt-8 mb-8">
+            <h2 class="text-2xl font-bold text-text-dark mb-6 flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+                Gerenciamento de Caixa
+            </h2>
+            <p class="text-text-light mb-6">Visualize informações sobre abertura, fechamento e movimentações do caixa.</p>
+        </div>
+
+        <?php
+        // Obter dados do caixa diretamente do banco de dados
+        $dadosCaixa = [];
+        $caixaAtual = null;
+        $fechamentosCaixa = [];
+        $movimentosCaixa = [];
+        $resumoCaixa = [
+            'total_vendas_periodo' => 0,
+            'total_vendas_hoje' => 0,
+            'total_dinheiro' => 0,
+            'total_cartao_credito' => 0,
+            'total_cartao_debito' => 0,
+            'total_pix' => 0,
+            'total_sangrias' => 0,
+            'total_suprimentos' => 0,
+            'saldo_em_caixa' => 0,
+            'caixa_status' => 'fechado',
+            'data_abertura' => null,
+            'valor_inicial' => 0
+        ];
+
+        try {
+            // Verificar se há um caixa aberto
+            $caixaAtual = $db->read("tb_fechamentos_caixa", ["*"], "status = 'aberto'", "id DESC", 1);
+            if (!empty($caixaAtual)) {
+                $caixaAtual = $caixaAtual[0];
+                
+                // Buscar movimentos do caixa atual
+                $movimentosCaixa = $db->read(
+                    "tb_movimentos_caixa", 
+                    ["*"], 
+                    "id_fechamento = {$caixaAtual['id']}"
+                );
+                
+                // Calcular resumo
+                $resumoCaixa['caixa_status'] = 'aberto';
+                $resumoCaixa['data_abertura'] = $caixaAtual['data_abertura'];
+                $resumoCaixa['valor_inicial'] = floatval($caixaAtual['valor_inicial']);
+                
+                $hoje = date('Y-m-d');
+                
+                foreach ($movimentosCaixa as $movimento) {
+                    // Calcular totais por tipo de movimento
+                    if ($movimento['tipo'] == 'venda') {
+                        $resumoCaixa['total_vendas_periodo'] += floatval($movimento['valor']);
+                        
+                        // Verificar se é uma venda de hoje
+                        $dataMovimento = date('Y-m-d', strtotime($movimento['data_hora']));
+                        if ($dataMovimento == $hoje) {
+                            $resumoCaixa['total_vendas_hoje'] += floatval($movimento['valor']);
+                        }
+                        
+                        // Acumular por método de pagamento
+                        $metodo = $movimento['metodo_pagamento'];
+                        if (isset($resumoCaixa['total_' . $metodo])) {
+                            $resumoCaixa['total_' . $metodo] += floatval($movimento['valor']);
+                        }
+                        
+                        // Verificar se é venda de material reciclável pela observação
+                        if (strpos($movimento['observacao'], 'Material reciclável') !== false) {
+                            // Se quiser fazer algo específico para vendas de material reciclável
+                            // Por exemplo, adicionar a uma categoria específica
+                        }
+                    } elseif ($movimento['tipo'] == 'sangria') {
+                        $resumoCaixa['total_sangrias'] += floatval($movimento['valor']);
+                    } elseif ($movimento['tipo'] == 'suprimento') {
+                        $resumoCaixa['total_suprimentos'] += floatval($movimento['valor']);
+                    }
+                }
+                
+                // Calcular saldo em caixa (apenas dinheiro)
+                $resumoCaixa['saldo_em_caixa'] = 
+                    $resumoCaixa['valor_inicial'] + 
+                    $resumoCaixa['total_dinheiro'] + 
+                    $resumoCaixa['total_suprimentos'] - 
+                    $resumoCaixa['total_sangrias'];
+            }
+            
+            // Obter os últimos 5 fechamentos de caixa
+            $fechamentosCaixa = $db->read(
+                "tb_fechamentos_caixa", 
+                ["*"], 
+                "status = 'fechado'", 
+                "data_fechamento DESC",
+                5
+            );
+        } catch (Exception $e) {
+            // Se ocorrer um erro, apenas registramos e seguimos em frente
+            error_log("Erro ao obter dados de caixa: " . $e->getMessage());
+        }
+        ?>
+
+        <!-- Resumo do Caixa Atual -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Status do Caixa -->
+            <div class="card">
+                <div class="stat-label">Status do Caixa</div>
+                <div class="stat-value flex items-center">
+                    <?php if ($resumoCaixa['caixa_status'] === 'aberto'): ?>
+                        <span class="bg-success/10 text-success rounded-full px-3 py-1 font-bold">Aberto</span>
+                    <?php else: ?>
+                        <span class="bg-danger/10 text-danger rounded-full px-3 py-1 font-bold">Fechado</span>
+                    <?php endif; ?>
+                </div>
+                <?php if ($resumoCaixa['caixa_status'] === 'aberto'): ?>
+                <div class="flex items-center mt-2">
+                    <span class="text-xs text-text-light">
+                        Aberto em <?= date('d/m/Y \à\s H:i', strtotime($resumoCaixa['data_abertura'])) ?>
+                    </span>
+                </div>
+                <?php else: ?>
+                <div class="flex items-center mt-2">
+                    <span class="text-xs text-text-light">
+                        <?= empty($fechamentosCaixa) ? 'Nenhum fechamento registrado' : 'Último fechamento: ' . date('d/m/Y \à\s H:i', strtotime($fechamentosCaixa[0]['data_fechamento'])) ?>
+                    </span>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Total de Vendas do Período -->
+            <div class="card">
+                <div class="stat-label">Vendas do Período</div>
+                <div class="stat-value">R$ <?= number_format($resumoCaixa['total_vendas_periodo'], 2, ',', '.') ?></div>
+                <div class="flex items-center mt-2">
+                    <span class="text-xs text-text-light">
+                        Desde <?= $resumoCaixa['data_abertura'] ? date('d/m', strtotime($resumoCaixa['data_abertura'])) : 'N/A' ?>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Vendas do Dia -->
+            <div class="card">
+                <div class="stat-label">Vendas de Hoje</div>
+                <div class="stat-value">R$ <?= number_format($resumoCaixa['total_vendas_hoje'], 2, ',', '.') ?></div>
+                <div class="flex items-center mt-2">
+                    <span class="text-xs text-text-light">
+                        <?= date('d/m/Y') ?>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Saldo em Caixa (Dinheiro) -->
+            <div class="card">
+                <div class="stat-label">Saldo em Caixa (Dinheiro)</div>
+                <div class="stat-value">R$ <?= number_format($resumoCaixa['saldo_em_caixa'], 2, ',', '.') ?></div>
+                <div class="flex items-center mt-2">
+                    <span class="text-xs text-<?= $resumoCaixa['saldo_em_caixa'] >= 0 ? 'success' : 'danger' ?>">
+                        <?= $resumoCaixa['saldo_em_caixa'] >= 0 ? 'Saldo positivo' : 'Saldo negativo' ?>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Seção de Vendas de Materiais Recicláveis -->
+        <?php
+        // Calcular o total de vendas de materiais recicláveis
+        $totalVendasMateriais = 0;
+        $vendasMateriaisPorTipo = [
+            'aluminio' => 0,
+            'papel' => 0,
+            'plastico' => 0,
+            'vidro' => 0,
+            'outros' => 0
+        ];
+
+        if (!empty($movimentosCaixa)) {
+            foreach ($movimentosCaixa as $movimento) {
+                if ($movimento['tipo'] == 'venda' && strpos($movimento['observacao'], 'Material reciclável') !== false) {
+                    $totalVendasMateriais += floatval($movimento['valor']);
+                    
+                    // Classificar por tipo de material
+                    if (strpos($movimento['observacao'], 'Alumínio') !== false) {
+                        $vendasMateriaisPorTipo['aluminio'] += floatval($movimento['valor']);
+                    } elseif (strpos($movimento['observacao'], 'Papel') !== false) {
+                        $vendasMateriaisPorTipo['papel'] += floatval($movimento['valor']);
+                    } elseif (strpos($movimento['observacao'], 'Plástico') !== false) {
+                        $vendasMateriaisPorTipo['plastico'] += floatval($movimento['valor']);
+                    } elseif (strpos($movimento['observacao'], 'Vidro') !== false) {
+                        $vendasMateriaisPorTipo['vidro'] += floatval($movimento['valor']);
+                    } else {
+                        $vendasMateriaisPorTipo['outros'] += floatval($movimento['valor']);
+                    }
+                }
+            }
+        }
+
+        // Porcentagem das vendas totais que são de materiais recicláveis
+        $porcentagemMateriais = $resumoCaixa['total_vendas_periodo'] > 0 ? 
+            ($totalVendasMateriais / $resumoCaixa['total_vendas_periodo']) * 100 : 0;
+        ?>
+
+        <div class="card mb-8">
+            <h2 class="card-header">Vendas de Materiais Recicláveis</h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 p-4">
+                <!-- Resumo das vendas de materiais -->
+                <div>
+                    <div class="mb-4">
+                        <div class="text-lg font-semibold text-primary">
+                            R$ <?= number_format($totalVendasMateriais, 2, ',', '.') ?>
+                        </div>
+                        <div class="text-sm text-text-light">
+                            Total de vendas de materiais recicláveis (<?= number_format($porcentagemMateriais, 1) ?>% das vendas)
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-3">
+                        <!-- Alumínio -->
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-text-dark">Alumínio</span>
+                                <span class="text-sm font-medium text-text-dark">R$ <?= number_format($vendasMateriaisPorTipo['aluminio'], 2, ',', '.') ?></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <?php 
+                                $porcentagemAluminio = $totalVendasMateriais > 0 ? 
+                                    ($vendasMateriaisPorTipo['aluminio'] / $totalVendasMateriais) * 100 : 0;
+                                ?>
+                                <div class="bg-amber-500 h-2.5 rounded-full" style="width: <?= $porcentagemAluminio ?>%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Papel -->
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-text-dark">Papel</span>
+                                <span class="text-sm font-medium text-text-dark">R$ <?= number_format($vendasMateriaisPorTipo['papel'], 2, ',', '.') ?></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <?php 
+                                $porcentagemPapel = $totalVendasMateriais > 0 ? 
+                                    ($vendasMateriaisPorTipo['papel'] / $totalVendasMateriais) * 100 : 0;
+                                ?>
+                                <div class="bg-blue-500 h-2.5 rounded-full" style="width: <?= $porcentagemPapel ?>%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Plástico -->
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-text-dark">Plástico</span>
+                                <span class="text-sm font-medium text-text-dark">R$ <?= number_format($vendasMateriaisPorTipo['plastico'], 2, ',', '.') ?></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <?php 
+                                $porcentagemPlastico = $totalVendasMateriais > 0 ? 
+                                    ($vendasMateriaisPorTipo['plastico'] / $totalVendasMateriais) * 100 : 0;
+                                ?>
+                                <div class="bg-emerald-500 h-2.5 rounded-full" style="width: <?= $porcentagemPlastico ?>%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Vidro -->
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-text-dark">Vidro</span>
+                                <span class="text-sm font-medium text-text-dark">R$ <?= number_format($vendasMateriaisPorTipo['vidro'], 2, ',', '.') ?></span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <?php 
+                                $porcentagemVidro = $totalVendasMateriais > 0 ? 
+                                    ($vendasMateriaisPorTipo['vidro'] / $totalVendasMateriais) * 100 : 0;
+                                ?>
+                                <div class="bg-indigo-500 h-2.5 rounded-full" style="width: <?= $porcentagemVidro ?>%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Instruções ou mensagem -->
+                <div class="flex items-center justify-center">
+                    <?php if ($totalVendasMateriais > 0): ?>
+                        <div class="text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-success mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <p class="text-text-dark font-medium">Vendas de materiais recicláveis registradas com sucesso!</p>
+                            <p class="text-text-light text-sm mt-1">Os valores serão incluídos no fechamento do caixa.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-text-light mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <p class="text-text-dark font-medium">Nenhuma venda de material reciclável registrada</p>
+                            <p class="text-text-light text-sm mt-1">Use o formulário de registro para incluir vendas de materiais.</p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detalhamento de Movimentações -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            <!-- Formas de Pagamento -->
+            <div class="card">
+                <h2 class="card-header">Formas de Pagamento</h2>
+                <div class="mt-4 space-y-4">
+                    <!-- Dinheiro -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-text-dark">Dinheiro</span>
+                            <span class="text-sm font-medium text-text-dark">R$ <?= number_format($resumoCaixa['total_dinheiro'], 2, ',', '.') ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <?php 
+                            $totalPagamentos = $resumoCaixa['total_dinheiro'] + $resumoCaixa['total_cartao_credito'] + 
+                                              $resumoCaixa['total_cartao_debito'] + $resumoCaixa['total_pix'];
+                            $porcentagemDinheiro = $totalPagamentos > 0 ? ($resumoCaixa['total_dinheiro'] / $totalPagamentos) * 100 : 0;
+                            ?>
+                            <div class="bg-green-500 h-2.5 rounded-full" style="width: <?= $porcentagemDinheiro ?>%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cartão de Crédito -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-text-dark">Cartão de Crédito</span>
+                            <span class="text-sm font-medium text-text-dark">R$ <?= number_format($resumoCaixa['total_cartao_credito'], 2, ',', '.') ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <?php 
+                            $porcentagemCredito = $totalPagamentos > 0 ? ($resumoCaixa['total_cartao_credito'] / $totalPagamentos) * 100 : 0;
+                            ?>
+                            <div class="bg-blue-500 h-2.5 rounded-full" style="width: <?= $porcentagemCredito ?>%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cartão de Débito -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-text-dark">Cartão de Débito</span>
+                            <span class="text-sm font-medium text-text-dark">R$ <?= number_format($resumoCaixa['total_cartao_debito'], 2, ',', '.') ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <?php 
+                            $porcentagemDebito = $totalPagamentos > 0 ? ($resumoCaixa['total_cartao_debito'] / $totalPagamentos) * 100 : 0;
+                            ?>
+                            <div class="bg-indigo-500 h-2.5 rounded-full" style="width: <?= $porcentagemDebito ?>%"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- PIX -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm font-medium text-text-dark">PIX</span>
+                            <span class="text-sm font-medium text-text-dark">R$ <?= number_format($resumoCaixa['total_pix'], 2, ',', '.') ?></span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <?php 
+                            $porcentagemPix = $totalPagamentos > 0 ? ($resumoCaixa['total_pix'] / $totalPagamentos) * 100 : 0;
+                            ?>
+                            <div class="bg-purple-500 h-2.5 rounded-full" style="width: <?= $porcentagemPix ?>%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Suprimentos e Sangrias -->
+            <div class="card">
+                <h2 class="card-header">Suprimentos e Sangrias</h2>
+                <div class="mt-4">
+                    <div class="flex justify-between mb-4">
+                        <div class="text-center">
+                            <div class="text-sm text-text-light mb-1">Suprimentos</div>
+                            <div class="text-xl font-bold text-success">+ R$ <?= number_format($resumoCaixa['total_suprimentos'], 2, ',', '.') ?></div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm text-text-light mb-1">Sangrias</div>
+                            <div class="text-xl font-bold text-danger">- R$ <?= number_format($resumoCaixa['total_sangrias'], 2, ',', '.') ?></div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-sm text-text-light mb-1">Saldo</div>
+                            <div class="text-xl font-bold text-primary">
+                                R$ <?= number_format($resumoCaixa['total_suprimentos'] - $resumoCaixa['total_sangrias'], 2, ',', '.') ?>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <?php if (!empty($movimentosCaixa)): ?>
+                    <div class="mt-4">
+                        <h3 class="text-sm font-semibold text-text-dark mb-2">Movimentações Recentes</h3>
+                        <div class="max-h-[200px] overflow-y-auto pr-2">
+                            <?php 
+                            // Filtrar apenas suprimentos e sangrias
+                            $movimentacoesRecentes = array_filter($movimentosCaixa, function($movimento) {
+                                return $movimento['tipo'] == 'suprimento' || $movimento['tipo'] == 'sangria';
+                            });
+                            
+                            // Ordenar por data (mais recente primeiro)
+                            usort($movimentacoesRecentes, function($a, $b) {
+                                return strtotime($b['data_hora']) - strtotime($a['data_hora']);
+                            });
+                            
+                            // Pegar apenas as 5 mais recentes
+                            $movimentacoesRecentes = array_slice($movimentacoesRecentes, 0, 5);
+                            
+                            if (empty($movimentacoesRecentes)):
+                            ?>
+                                <p class="text-text-light text-sm italic text-center">Nenhuma movimentação de suprimento ou sangria registrada.</p>
+                            <?php else: ?>
+                                <div class="space-y-2">
+                                    <?php foreach ($movimentacoesRecentes as $mov): ?>
+                                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                                            <div>
+                                                <div class="text-sm font-medium text-text-dark">
+                                                    <?= $mov['tipo'] == 'suprimento' ? 'Suprimento' : 'Sangria' ?>
+                                                </div>
+                                                <div class="text-xs text-text-light">
+                                                    <?= date('d/m/Y H:i', strtotime($mov['data_hora'])) ?>
+                                                </div>
+                                            </div>
+                                            <div class="text-sm font-semibold <?= $mov['tipo'] == 'suprimento' ? 'text-success' : 'text-danger' ?>">
+                                                <?= $mov['tipo'] == 'suprimento' ? '+' : '-' ?> R$ <?= number_format($mov['valor'], 2, ',', '.') ?>
+                                            </div>
+                                        </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico de Fechamentos -->
+        <div class="card mb-8">
+            <h2 class="card-header">Histórico de Fechamentos</h2>
+            <?php if (empty($fechamentosCaixa)): ?>
+            <div class="py-6 text-center text-text-light">
+                <p>Nenhum fechamento de caixa registrado ainda.</p>
+            </div>
+            <?php else: ?>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead>
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-text-light uppercase tracking-wider">Data</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-text-light uppercase tracking-wider">Usuário</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-text-light uppercase tracking-wider">Valor Inicial</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-text-light uppercase tracking-wider">Valor Final</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-text-light uppercase tracking-wider">Valor Esperado</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-text-light uppercase tracking-wider">Diferença</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">
+                        <?php foreach ($fechamentosCaixa as $fechamento): ?>
+                        <tr>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm">
+                                <div class="font-medium text-text-dark">
+                                    <?= date('d/m/Y', strtotime($fechamento['data_fechamento'])) ?>
+                                </div>
+                                <div class="text-xs text-text-light">
+                                    <?= date('H:i', strtotime($fechamento['data_fechamento'])) ?>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-text-dark text-center">
+                                <?= htmlspecialchars($fechamento['usuario_fechamento']) ?>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-text-dark text-center">
+                                R$ <?= number_format($fechamento['valor_inicial'], 2, ',', '.') ?>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-text-dark text-center">
+                                R$ <?= number_format($fechamento['valor_final'], 2, ',', '.') ?>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-text-dark text-center">
+                                R$ <?= number_format($fechamento['valor_esperado'], 2, ',', '.') ?>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-sm text-center">
+                                <?php 
+                                $diferenca = floatval($fechamento['diferenca']);
+                                $textClass = $diferenca >= 0 ? 'text-success' : 'text-danger';
+                                $sinal = $diferenca >= 0 ? '+' : '';
+                                ?>
+                                <span class="font-medium <?= $textClass ?>">
+                                    <?= $sinal ?> R$ <?= number_format(abs($diferenca), 2, ',', '.') ?>
+                                </span>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
+        </div>
     </div>
 
     <script>
@@ -1753,7 +2250,7 @@ $vendasPorStatus = array_map('intval', $vendasPorStatus);
                 <p class="text-xs text-text-light mt-1">Digite o CEP e clique em Buscar para preencher as coordenadas automaticamente</p>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-4">
-                <div>
+                        <div>
                     <label class="block text-text-dark text-sm font-medium mb-2" for="latitude">
                         Latitude
                     </label>
@@ -2189,6 +2686,442 @@ $vendasPorStatus = array_map('intval', $vendasPorStatus);
                 initMap();
             }
         });
+    </script>
+
+    <!-- Seção do Mapa de Coleta com Registro de Vendas -->
+    <div class="container mx-auto border-t-2 border-gray-200 pt-8 px-4 mb-8">
+        <h2 class="text-2xl font-bold text-text-dark mb-6 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Registro e Vendas de Materiais Recicláveis
+        </h2>
+        <p class="text-text-light mb-6">Registre a venda de materiais recicláveis.</p>
+    </div>
+
+    <!-- Sistema de Registro de Venda de Materiais -->
+    <div class="container mx-auto px-4 py-4 mb-8">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Formulário de Registro de Materiais -->
+            <div class="bg-white rounded-xl shadow-md p-6 lg:col-span-1">
+                <h3 class="text-lg font-semibold text-text-dark mb-4">Registrar Venda de Material</h3>
+                <form id="formRegistroMaterial" class="space-y-4">
+                    <!-- Tipo de Material -->
+                    <div>
+                        <label for="tipoMaterial" class="block text-sm font-medium text-text-dark mb-1">Tipo de Material</label>
+                        <select id="tipoMaterial" name="tipoMaterial" class="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            <option value="">Selecione o material</option>
+                            <option value="aluminio" data-preco="<?= $mediaPrecos['aluminio'] ?? '18,75' ?>">Alumínio</option>
+                            <option value="papel" data-preco="<?= $mediaPrecos['papel'] ?? '2,35' ?>">Papel</option>
+                            <option value="plastico" data-preco="<?= $mediaPrecos['plastico'] ?? '3,75' ?>">Plástico</option>
+                            <option value="vidro" data-preco="<?= $mediaPrecos['vidro'] ?? '1,25' ?>">Vidro</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Quantidade -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="quantidade" class="block text-sm font-medium text-text-dark mb-1">Quantidade</label>
+                            <input type="number" id="quantidade" name="quantidade" min="0" step="0.01" placeholder="0,00" class="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="unidade" class="block text-sm font-medium text-text-dark mb-1">Unidade</label>
+                            <select id="unidade" name="unidade" class="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary">
+                                <option value="kg">Quilogramas (kg)</option>
+                                <option value="g">Gramas (g)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Preço -->
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="precoUnitario" class="block text-sm font-medium text-text-dark mb-1">Preço por kg (R$)</label>
+                            <input type="text" id="precoUnitario" name="precoUnitario" placeholder="0,00" class="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                        <div>
+                            <label for="valorTotal" class="block text-sm font-medium text-text-dark mb-1">Valor Total (R$)</label>
+                            <input type="text" id="valorTotal" name="valorTotal" placeholder="0,00" readonly class="w-full bg-gray-50 border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary">
+                        </div>
+                    </div>
+                    
+                    <!-- Método de Pagamento -->
+                    <div>
+                        <label for="metodoPagamento" class="block text-sm font-medium text-text-dark mb-1">Método de Pagamento</label>
+                        <select id="metodoPagamento" name="metodoPagamento" class="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary">
+                            <option value="dinheiro">Dinheiro</option>
+                            <option value="cartao_credito">Cartão de Crédito</option>
+                            <option value="cartao_debito">Cartão de Débito</option>
+                            <option value="pix">PIX</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Observações -->
+                    <div>
+                        <label for="observacao" class="block text-sm font-medium text-text-dark mb-1">Observações</label>
+                        <textarea id="observacao" name="observacao" rows="2" placeholder="Informações adicionais sobre a venda" class="w-full border border-gray-300 rounded-md shadow-sm px-3 py-2 focus:outline-none focus:ring-primary focus:border-primary"></textarea>
+                    </div>
+                    
+                    <!-- Botão para registrar -->
+                    <div class="pt-2">
+                        <button type="submit" id="btnRegistrarVenda" class="w-full bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md shadow transition-colors duration-200 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Registrar Venda
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Feedback do registro -->
+                <div id="feedbackRegistro" class="mt-4 hidden">
+                    <div class="p-3 rounded-md"></div>
+                </div>
+            </div>
+            
+            <!-- Mapa -->
+            <div class="lg:col-span-2">
+                <!-- Lista de Vendas Recentes -->
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-lg font-semibold text-text-dark mb-4">Vendas de Material Recentes</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data/Hora</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Material</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantidade</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Valor</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pagamento</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200" id="tabelaVendasMaterial">
+                                <?php
+                                // Buscar vendas de material no banco de dados
+                                $vendasMaterial = [];
+                                try {
+                                    $vendasMaterial = $db->read(
+                                        "tb_movimentos_caixa", 
+                                        ["*"], 
+                                        "tipo = 'venda' AND observacao LIKE '%Material reciclável%'", 
+                                        "data_hora DESC",
+                                    );
+                                } catch (Exception $e) {
+                                    error_log("Erro ao buscar vendas de material: " . $e->getMessage());
+                                }
+                                
+                                if (empty($vendasMaterial)): 
+                                ?>
+                                <tr>
+                                    <td colspan="5" class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                                        Nenhuma venda de material registrada ainda
+                                    </td>
+                                </tr>
+                                <?php else:
+                                    foreach ($vendasMaterial as $venda):
+                                        // Extrair o tipo de material da observação
+                                        $tipoMaterial = "";
+                                        $observacao = $venda['observacao'];
+                                        
+                                        if (strpos($observacao, 'Alumínio') !== false) {
+                                            $tipoMaterial = "Alumínio";
+                                        } elseif (strpos($observacao, 'Papel') !== false) {
+                                            $tipoMaterial = "Papel";
+                                        } elseif (strpos($observacao, 'Plástico') !== false) {
+                                            $tipoMaterial = "Plástico";
+                                        } elseif (strpos($observacao, 'Vidro') !== false) {
+                                            $tipoMaterial = "Vidro";
+                                        } else {
+                                            $tipoMaterial = "Material reciclável";
+                                        }
+                                        
+                                        // Extrair a quantidade da observação
+                                        preg_match('/(\d+\.?\d*)\s*(kg|g)/i', $observacao, $matches);
+                                        $quantidade = !empty($matches) ? $matches[1] . ' ' . $matches[2] : "N/A";
+                                ?>
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <?= date('d/m/Y H:i', strtotime($venda['data_hora'])) ?>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                        <?= htmlspecialchars($tipoMaterial) ?>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <?= htmlspecialchars($quantidade) ?>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                                        R$ <?= number_format($venda['valor'], 2, ',', '.') ?>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <?php
+                                        $metodos = [
+                                            'dinheiro' => 'Dinheiro',
+                                            'cartao_credito' => 'Cartão de Crédito',
+                                            'cartao_debito' => 'Cartão de Débito',
+                                            'pix' => 'PIX'
+                                        ];
+                                        echo $metodos[$venda['metodo_pagamento']] ?? $venda['metodo_pagamento'];
+                                        ?>
+                                    </td>
+                                </tr>
+                                <?php 
+                                    endforeach;
+                                endif; 
+                                ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmação de registro -->
+    <div id="registroConfirmadoModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center z-[1000] p-4">
+        <div class="bg-white rounded-lg p-6 sm:p-8 max-w-md w-full mx-auto relative z-[1001]">
+            <div class="text-center mb-6">
+                <svg class="h-16 w-16 text-success mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+                <h3 class="text-xl font-bold text-text-dark">Venda Registrada com Sucesso!</h3>
+                <p class="text-text-light mt-2" id="registroConfirmadoMensagem"></p>
+            </div>
+            <div class="mt-6">
+                <button id="btnFecharConfirmacao" class="w-full bg-primary hover:bg-primary-dark text-white font-medium py-2 px-4 rounded-md shadow transition-colors duration-200">
+                    Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Inicializar o sistema de registro de material
+        inicializarRegistroMaterial();
+    });
+
+    function inicializarRegistroMaterial() {
+        const formRegistro = document.getElementById('formRegistroMaterial');
+        const tipoMaterialSelect = document.getElementById('tipoMaterial');
+        const quantidadeInput = document.getElementById('quantidade');
+        const unidadeSelect = document.getElementById('unidade');
+        const precoUnitarioInput = document.getElementById('precoUnitario');
+        const valorTotalInput = document.getElementById('valorTotal');
+        const metodoPagamentoSelect = document.getElementById('metodoPagamento');
+        const feedbackRegistro = document.getElementById('feedbackRegistro');
+        
+        // Preencher preço unitário ao selecionar material
+        tipoMaterialSelect.addEventListener('change', function() {
+            const option = this.options[this.selectedIndex];
+            let preco = option.getAttribute('data-preco');
+            
+            if (preco) {
+                // Substituir vírgula por ponto para cálculos
+                preco = preco.replace(',', '.');
+                precoUnitarioInput.value = preco;
+                
+                // Atualizar valor total se quantidade já estiver preenchida
+                calcularValorTotal();
+            } else {
+                precoUnitarioInput.value = '';
+                valorTotalInput.value = '';
+            }
+        });
+        
+        // Atualizar valor total ao alterar quantidade, unidade ou preço
+        quantidadeInput.addEventListener('input', calcularValorTotal);
+        unidadeSelect.addEventListener('change', calcularValorTotal);
+        precoUnitarioInput.addEventListener('input', calcularValorTotal);
+        
+        // Formatar o campo de preço para usar vírgula como separador decimal
+        precoUnitarioInput.addEventListener('blur', function() {
+            if (this.value) {
+                // Substituir ponto por vírgula para exibição
+                this.value = parseFloat(this.value.replace(',', '.')).toFixed(2).replace('.', ',');
+            }
+        });
+        
+        // Submeter o formulário
+        formRegistro.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Validar formulário
+            if (!validarFormulario()) {
+                return;
+            }
+            
+            // Preparar dados para envio
+            const tipoMaterial = tipoMaterialSelect.options[tipoMaterialSelect.selectedIndex].text;
+            const quantidade = parseFloat(quantidadeInput.value.replace(',', '.'));
+            const unidade = unidadeSelect.value;
+            const precoUnitario = parseFloat(precoUnitarioInput.value.replace(',', '.'));
+            const valorTotal = parseFloat(valorTotalInput.value.replace(',', '.'));
+            const metodoPagamento = metodoPagamentoSelect.value;
+            const observacao = document.getElementById('observacao').value;
+            
+            // Converter para kg se a unidade for g
+            const quantidadeKg = unidade === 'g' ? quantidade / 1000 : quantidade;
+            
+            // Construir objeto de dados para envio
+            const dadosVenda = {
+                tipo_material: tipoMaterialSelect.value,
+                quantidade: quantidadeKg,
+                unidade_original: unidade,
+                preco_unitario: precoUnitario,
+                valor_total: valorTotal,
+                metodo_pagamento: metodoPagamento,
+                observacao: observacao
+            };
+            
+            // Registrar venda no sistema
+            registrarVendaMaterial(dadosVenda, tipoMaterial);
+        });
+        
+        function calcularValorTotal() {
+            const quantidade = parseFloat(quantidadeInput.value.replace(',', '.')) || 0;
+            const unidade = unidadeSelect.value;
+            const precoUnitario = parseFloat(precoUnitarioInput.value.replace(',', '.')) || 0;
+            
+            // Converter para kg se a unidade for g
+            const quantidadeKg = unidade === 'g' ? quantidade / 1000 : quantidade;
+            
+            // Calcular valor total
+            const valorTotal = quantidadeKg * precoUnitario;
+            
+            // Atualizar campo de valor total
+            valorTotalInput.value = valorTotal.toFixed(2).replace('.', ',');
+        }
+        
+        function validarFormulario() {
+            const tipoMaterial = tipoMaterialSelect.value;
+            const quantidade = quantidadeInput.value;
+            const precoUnitario = precoUnitarioInput.value;
+            
+            // Verificar se os campos obrigatórios estão preenchidos
+            if (!tipoMaterial) {
+                mostrarFeedback('Selecione o tipo de material', 'erro');
+                return false;
+            }
+            
+            if (!quantidade || parseFloat(quantidade.replace(',', '.')) <= 0) {
+                mostrarFeedback('Informe uma quantidade válida', 'erro');
+                return false;
+            }
+            
+            if (!precoUnitario || parseFloat(precoUnitario.replace(',', '.')) <= 0) {
+                mostrarFeedback('Informe um preço unitário válido', 'erro');
+                return false;
+            }
+            
+            return true;
+        }
+        
+        function mostrarFeedback(mensagem, tipo) {
+            feedbackRegistro.classList.remove('hidden');
+            const feedbackDiv = feedbackRegistro.querySelector('div');
+            
+            // Definir cores com base no tipo de feedback
+            if (tipo === 'erro') {
+                feedbackDiv.className = 'p-3 rounded-md bg-danger/10 text-danger-dark';
+            } else if (tipo === 'sucesso') {
+                feedbackDiv.className = 'p-3 rounded-md bg-success/10 text-success-dark';
+            } else {
+                feedbackDiv.className = 'p-3 rounded-md bg-blue-50 text-blue-700';
+            }
+            
+            feedbackDiv.textContent = mensagem;
+            
+            // Esconder o feedback após 5 segundos
+            setTimeout(() => {
+                feedbackRegistro.classList.add('hidden');
+            }, 5000);
+        }
+        
+        function registrarVendaMaterial(dadosVenda, tipoMaterial) {
+            // Mostrar indicador de carregamento
+            const btnRegistrar = document.getElementById('btnRegistrarVenda');
+            const btnTextoOriginal = btnRegistrar.innerHTML;
+            btnRegistrar.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Processando...';
+            btnRegistrar.disabled = true;
+            
+            // Registrar evento para debug
+            console.log('Iniciando registro de venda de material:', dadosVenda);
+            
+            // Preparar observação para o registro no caixa
+            const observacaoCompleta = `Venda de Material reciclável: ${tipoMaterial} - ${dadosVenda.quantidade.toFixed(3)} kg ${dadosVenda.observacao ? '- ' + dadosVenda.observacao : ''}`;
+            
+            // Preparar dados para o endpoint
+            const dadosParaAPI = {
+                tipo: 'venda',
+                valor: dadosVenda.valor_total,
+                metodo_pagamento: dadosVenda.metodo_pagamento,
+                observacao: observacaoCompleta
+            };
+            
+            console.log('Enviando dados para API:', dadosParaAPI);
+            
+            // Fazer a requisição para registrar a venda no caixa
+            fetch('/api/registrar-venda-material', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dadosParaAPI)
+            })
+            .then(response => {
+                console.log('Resposta recebida:', response);
+                // Verificar se a resposta está ok antes de tentar parsear como JSON
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        console.error('Resposta de erro:', text);
+                        throw new Error('Erro na requisição: ' + response.status + ' - ' + text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Dados recebidos:', data);
+                if (data.success) {
+                    // Limpar formulário
+                    formRegistro.reset();
+                    valorTotalInput.value = '';
+                    
+                    // Mostrar feedback de sucesso
+                    mostrarFeedback('Venda registrada com sucesso!', 'sucesso');
+                    
+                    // Mostrar modal de confirmação
+                    const modalConfirmacao = document.getElementById('registroConfirmadoModal');
+                    const mensagemConfirmacao = document.getElementById('registroConfirmadoMensagem');
+                    
+                    mensagemConfirmacao.textContent = `Venda de ${tipoMaterial} registrada no valor de R$ ${dadosVenda.valor_total.toFixed(2).replace('.', ',')}`;
+                    
+                    modalConfirmacao.classList.remove('hidden');
+                    modalConfirmacao.classList.add('flex');
+                    
+                    // Configurar botão de fechar
+                    document.getElementById('btnFecharConfirmacao').onclick = function() {
+                        modalConfirmacao.classList.remove('flex');
+                        modalConfirmacao.classList.add('hidden');
+                        
+                        // Recarregar a página para atualizar os dados de caixa
+                        window.location.reload();
+                    };
+                } else {
+                    mostrarFeedback(data.message || 'Erro ao registrar a venda', 'erro');
+                }
+            })
+            .catch(error => {
+                console.error('Erro durante a requisição:', error);
+                mostrarFeedback('Erro ao comunicar com o servidor: ' + error.message, 'erro');
+            })
+            .finally(() => {
+                // Restaurar botão
+                btnRegistrar.innerHTML = btnTextoOriginal;
+                btnRegistrar.disabled = false;
+            });
+        }
+    }
     </script>
 </body>
 

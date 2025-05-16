@@ -161,17 +161,55 @@ function toggleEditField(field) {
 
 // Abrir modal para adicionar produtos
 function abrirModalAdicionarProduto() {
+    // Verificar se o pedido em edição existe
     if (!pedidoEmEdicao) return;
     
-    const modal = document.getElementById('adicionarProdutoModal');
-    const produtosListaElement = document.getElementById('adicionarProdutosLista');
-    
     // Carregar produtos disponíveis
-    carregarProdutosDisponiveis(produtosListaElement);
+    const containerElement = document.getElementById('adicionarProdutosLista');
+    if (containerElement) {
+        carregarProdutosDisponiveis(containerElement);
+    }
     
-    // Exibir modal
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    // Abrir o modal
+    const modal = document.getElementById('adicionarProdutoModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        // Destacar produtos que já estão no pedido
+        destacarProdutosNoPedido();
+    }
+}
+
+// Função para destacar produtos já incluídos no pedido
+function destacarProdutosNoPedido() {
+    if (!pedidoEmEdicao || !pedidoEmEdicao.produtos) return;
+    
+    // Aguardar o DOM estar pronto (pequeno delay para garantir que os elementos foram renderizados)
+    setTimeout(() => {
+        const produtosAtuais = pedidoEmEdicao.produtos || {};
+        
+        // Percorrer todos os produtos no modal de adicionar
+        const cards = document.querySelectorAll('.produto-adicionar-card');
+        cards.forEach(card => {
+            const produtoId = card.getAttribute('data-id');
+            const quantidadeAtual = produtosAtuais[produtoId] || 0;
+            
+            // Se o produto já está no pedido, destacar o card
+            if (quantidadeAtual > 0) {
+                card.classList.add('border-primary', 'bg-primary/5');
+                
+                // Adicionar uma indicação visual de produto já adicionado
+                if (!card.querySelector('.produto-ja-adicionado')) {
+                    const indicador = document.createElement('div');
+                    indicador.className = 'produto-ja-adicionado absolute -top-2 -right-2 w-6 h-6 bg-primary text-white rounded-full flex items-center justify-center text-xs font-bold shadow-md';
+                    indicador.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+                    card.style.position = 'relative';
+                    card.appendChild(indicador);
+                }
+            }
+        });
+    }, 100);
 }
 
 // Fechar modal de adicionar produtos
@@ -193,7 +231,7 @@ function carregarProdutosDisponiveis(containerElement) {
     }
     
     // Recuperar os produtos do DOM (do modal de novo pedido)
-    const produtosCards = document.querySelectorAll('.grid.grid-cols-1.sm\\:grid-cols-2.lg\\:grid-cols-3 .bg-white.border');
+    const produtosCards = document.querySelectorAll('.produto-card');
     const produtosAtuais = pedidoEmEdicao.produtos || {};
     
     if (produtosCards.length === 0) {
@@ -201,40 +239,65 @@ function carregarProdutosDisponiveis(containerElement) {
         return;
     }
     
-    let html = '';
+    // Adicionar campo de busca ao topo do modal
+    let html = `
+        <div class="mb-4 sticky top-0 bg-white p-2 rounded-lg shadow-sm">
+            <div class="relative">
+                <input type="text" id="buscaProdutoAdicionar" placeholder="Buscar produto..." 
+                    class="w-full border border-gray-300 rounded-md pl-10 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                <button id="limparBuscaAdicionar" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 hidden">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    `;
     
     // Criar cards para cada produto
     produtosCards.forEach(card => {
-        const quantityElement = card.querySelector('[id^="quantidade-"]');
-        if (!quantityElement) return;
+        const produtoId = card.getAttribute('data-id');
+        if (!produtoId) return;
         
-        const produtoId = quantityElement.id.replace('quantidade-', '');
-        const nome = card.querySelector('.w-full.text-center.bg-accent')?.textContent.trim() || `Produto ${produtoId}`;
-        const precoElement = card.querySelector('.text-primary.font-bold');
-        const preco = precoElement ? precoElement.textContent.trim() : 'R$ 0,00';
+        const nome = card.getAttribute('data-nome') || `Produto ${produtoId}`;
+        const preco = card.getAttribute('data-preco') || 'R$ 0,00';
+        const categoria = card.getAttribute('data-categoria') || '';
         
         // Verificar se o produto já está no pedido
         const quantidadeAtual = produtosAtuais[produtoId] || 0;
         
         html += `
-            <div class="bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center">
+            <div class="produto-adicionar-card mb-3 bg-white border border-gray-200 rounded-lg p-4 flex justify-between items-center transition-all duration-200 hover:shadow-md" 
+                 data-nome="${nome}" 
+                 data-categoria="${categoria}" 
+                 data-id="${produtoId}">
                 <div>
                     <h4 class="font-medium text-text-dark">${nome}</h4>
-                    <p class="text-sm text-primary">${preco}</p>
+                    <span class="text-xs text-text-light bg-gray-100 px-2 py-0.5 rounded-full">${categoria}</span>
+                    <p class="text-sm text-primary mt-1 font-medium">${preco}</p>
                 </div>
                 <div class="flex items-center space-x-2">
                     <button 
                         onclick="diminuirQuantidadeAdicionar('${produtoId}')" 
-                        class="bg-danger hover:bg-danger-dark text-white rounded-full w-8 h-8 flex items-center justify-center text-lg focus:outline-none">
-                        -
+                        class="bg-danger hover:bg-danger-dark text-white rounded-full w-8 h-8 flex items-center justify-center text-lg focus:outline-none focus:ring-2 focus:ring-danger/50 active:scale-95 transition-all duration-200 touch-manipulation">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+                        </svg>
                     </button>
                     <div id="adicionar-quantidade-${produtoId}" class="w-10 h-10 flex items-center justify-center bg-white rounded-lg shadow-inner text-lg font-bold border border-gray-200">
                         ${quantidadeAtual}
                     </div>
                     <button 
                         onclick="aumentarQuantidadeAdicionar('${produtoId}')" 
-                        class="bg-success hover:bg-success-dark text-white rounded-full w-8 h-8 flex items-center justify-center text-lg focus:outline-none">
-                        +
+                        class="bg-success hover:bg-success-dark text-white rounded-full w-8 h-8 flex items-center justify-center text-lg focus:outline-none focus:ring-2 focus:ring-success/50 active:scale-95 transition-all duration-200 touch-manipulation">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
                     </button>
                 </div>
             </div>
@@ -246,6 +309,51 @@ function carregarProdutosDisponiveis(containerElement) {
         containerElement.innerHTML = '<p class="text-text-light text-center py-4">Nenhum produto disponível para adicionar</p>';
     } else {
         containerElement.innerHTML = html;
+        
+        // Configurar a funcionalidade de busca
+        const searchInput = document.getElementById('buscaProdutoAdicionar');
+        const clearButton = document.getElementById('limparBuscaAdicionar');
+        
+        if (searchInput && clearButton) {
+            // Evento para busca em tempo real
+            searchInput.addEventListener('input', function() {
+                const termo = this.value.toLowerCase().trim();
+                
+                // Mostrar/ocultar botão de limpar
+                if (termo.length > 0) {
+                    clearButton.classList.remove('hidden');
+                    clearButton.classList.add('flex');
+                } else {
+                    clearButton.classList.add('hidden');
+                    clearButton.classList.remove('flex');
+                }
+                
+                // Filtrar produtos pelo termo de busca
+                const cards = document.querySelectorAll('.produto-adicionar-card');
+                cards.forEach(card => {
+                    const nome = card.getAttribute('data-nome').toLowerCase();
+                    const categoria = card.getAttribute('data-categoria').toLowerCase();
+                    
+                    if (nome.includes(termo) || categoria.includes(termo)) {
+                        card.classList.remove('hidden');
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+            });
+            
+            // Evento para limpar busca
+            clearButton.addEventListener('click', function() {
+                searchInput.value = '';
+                this.classList.add('hidden');
+                
+                // Mostrar todos os produtos
+                const cards = document.querySelectorAll('.produto-adicionar-card');
+                cards.forEach(card => card.classList.remove('hidden'));
+                
+                searchInput.focus();
+            });
+        }
     }
 }
 
@@ -825,20 +933,16 @@ function buscarInfoProdutos(produtos, containerElement) {
     
     // Buscar informações dos produtos usando os dados que já temos no DOM
     // Extraindo os produtos da tela modal de "Novo Pedido"
-    const produtosCards = document.querySelectorAll('.grid.grid-cols-1.sm\\:grid-cols-2.lg\\:grid-cols-3 .bg-white.border');
+    const produtosCards = document.querySelectorAll('.produto-card');
     
     // Mapear os produtos do DOM para um objeto indexado por ID
     const produtosMap = {};
     produtosCards.forEach(card => {
-        const quantityElement = card.querySelector('[id^="quantidade-"]');
-        if (quantityElement) {
-            const id = quantityElement.id.replace('quantidade-', '');
-            const nome = card.querySelector('.w-full.text-center.bg-accent')?.textContent.trim() || `Produto ${id}`;
-            const precoElement = card.querySelector('.text-primary.font-bold');
-            const preco = precoElement ? precoElement.textContent.trim() : 'R$ 0,00';
-            
-            produtosMap[id] = { id, nome, preco };
-        }
+        const id = card.getAttribute('data-id');
+        const nome = card.getAttribute('data-nome') || `Produto ${id}`;
+        const preco = card.getAttribute('data-preco') || 'R$ 0,00';
+        
+        produtosMap[id] = { id, nome, preco };
     });
     
     // Criar a tabela de produtos

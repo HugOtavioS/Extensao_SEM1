@@ -32,6 +32,180 @@ class CaixaController {
         return !empty($caixa) ? $caixa[0] : null;
     }
     
+    // Método para retornar o status do caixa
+    public function getStatus() {
+        $caixaAtual = $this->verificarCaixaAberto();
+        
+        if (!$caixaAtual) {
+            // Não há caixa aberto
+            echo json_encode([
+                'success' => true,
+                'caixa_aberto' => false
+            ]);
+            return;
+        }
+        
+        // Buscar apenas pedidos com status "entregue" e "pago" que não estão associados a um fechamento
+        $pedidos = $this->db->read(
+            "tb_pedidos", 
+            ["valor_total"], 
+            "status = 'entregue' AND pago = 1 AND (fechamento_caixa_id IS NULL OR fechamento_caixa_id = 0)"
+        );
+        
+        // Calcular valor total de vendas
+        $valorTotalVendas = 0;
+        foreach ($pedidos as $pedido) {
+            $valorTotalVendas += floatval($pedido['valor_total']);
+        }
+        
+        // Calcular resumo do caixa
+        $movimentos = $this->db->read(
+            "tb_movimentos_caixa", 
+            ["*"], 
+            "id_fechamento = " . $caixaAtual['id']
+        );
+        
+        // Inicializar resumo
+        $resumo = [
+            'vendas' => [
+                'dinheiro' => $valorTotalVendas, // Usar o total calculado dos pedidos
+                'cartao_credito' => 0,
+                'cartao_debito' => 0,
+                'pix' => 0,
+                'total' => $valorTotalVendas // Usar o total calculado dos pedidos
+            ],
+            'movimentos' => [
+                'suprimentos' => 0,
+                'sangrias' => 0,
+                'cancelamentos' => 0,
+                'vendas_materiais' => 0 // Novo campo para vendas de materiais
+            ]
+        ];
+        
+        // Processar movimentos
+        foreach ($movimentos as $movimento) {
+            if ($movimento['tipo'] == 'suprimento') {
+                $resumo['movimentos']['suprimentos'] += floatval($movimento['valor']);
+            } else if ($movimento['tipo'] == 'sangria') {
+                $resumo['movimentos']['sangrias'] += floatval($movimento['valor']);
+            } else if ($movimento['tipo'] == 'cancelamento') {
+                $resumo['movimentos']['cancelamentos'] += floatval($movimento['valor']);
+            } else if ($movimento['tipo'] == 'venda' && strpos($movimento['observacao'], 'Material reciclável') !== false) {
+                // Somar vendas de materiais recicláveis
+                $resumo['movimentos']['vendas_materiais'] += floatval($movimento['valor']);
+            }
+        }
+        
+        // Retornar resposta com dados do caixa e resumo
+        echo json_encode([
+            'success' => true,
+            'caixa_aberto' => true,
+            'dados' => [
+                'id' => $caixaAtual['id'],
+                'data_abertura' => $caixaAtual['data_abertura'],
+                'usuario_abertura' => $caixaAtual['usuario_abertura'],
+                'valor_inicial' => $caixaAtual['valor_inicial'],
+                'resumo' => $resumo
+            ]
+        ]);
+    }
+    
+    // Método para retornar os dados detalhados do caixa
+    public function getDados() {
+        $caixaAtual = $this->verificarCaixaAberto();
+        
+        if (!$caixaAtual) {
+            // Não há caixa aberto
+            echo json_encode([
+                'success' => false,
+                'message' => 'Não há caixa aberto para este usuário.'
+            ]);
+            return;
+        }
+        
+        // Buscar apenas pedidos com status "entregue" e "pago" que não estão associados a um fechamento
+        $pedidos = $this->db->read(
+            "tb_pedidos", 
+            ["*"], 
+            "status = 'entregue' AND pago = 1 AND (fechamento_caixa_id IS NULL OR fechamento_caixa_id = 0)"
+        );
+        
+        // Calcular valor total de vendas
+        $valorTotalVendas = 0;
+        foreach ($pedidos as $pedido) {
+            $valorTotalVendas += floatval($pedido['valor_total']);
+        }
+        
+        // Calcular resumo do caixa
+        $movimentos = $this->db->read(
+            "tb_movimentos_caixa", 
+            ["*"], 
+            "id_fechamento = " . $caixaAtual['id']
+        );
+        
+        // Inicializar resumo
+        $resumo = [
+            'vendas' => [
+                'dinheiro' => $valorTotalVendas, // Usar o total calculado dos pedidos
+                'cartao_credito' => 0,
+                'cartao_debito' => 0,
+                'pix' => 0,
+                'total' => $valorTotalVendas // Usar o total calculado dos pedidos
+            ],
+            'movimentos' => [
+                'suprimentos' => 0,
+                'sangrias' => 0,
+                'cancelamentos' => 0,
+                'vendas_materiais' => 0 // Novo campo para vendas de materiais
+            ]
+        ];
+        
+        // Processar movimentos
+        foreach ($movimentos as $movimento) {
+            if ($movimento['tipo'] == 'suprimento') {
+                $resumo['movimentos']['suprimentos'] += floatval($movimento['valor']);
+            } else if ($movimento['tipo'] == 'sangria') {
+                $resumo['movimentos']['sangrias'] += floatval($movimento['valor']);
+            } else if ($movimento['tipo'] == 'cancelamento') {
+                $resumo['movimentos']['cancelamentos'] += floatval($movimento['valor']);
+            } else if ($movimento['tipo'] == 'venda' && strpos($movimento['observacao'], 'Material reciclável') !== false) {
+                // Somar vendas de materiais recicláveis
+                $resumo['movimentos']['vendas_materiais'] += floatval($movimento['valor']);
+            }
+        }
+        
+        // Agrupar pedidos por dia
+        $pedidosAgrupados = [];
+        foreach ($pedidos as $pedido) {
+            $dataPedido = date('Y-m-d', strtotime($pedido['data_pedido']));
+            
+            if (!isset($pedidosAgrupados[$dataPedido])) {
+                $pedidosAgrupados[$dataPedido] = [
+                    'data' => $dataPedido,
+                    'formatted_date' => date('d/m/Y', strtotime($dataPedido)),
+                    'pedidos' => []
+                ];
+            }
+            
+            $pedidosAgrupados[$dataPedido]['pedidos'][] = $pedido;
+        }
+        
+        // Converter para array indexado para JSON
+        $pedidosFormatados = array_values($pedidosAgrupados);
+        
+        echo json_encode([
+            'success' => true,
+            'dados' => [
+                'id' => $caixaAtual['id'],
+                'data_abertura' => $caixaAtual['data_abertura'],
+                'usuario_abertura' => $caixaAtual['usuario_abertura'],
+                'valor_inicial' => $caixaAtual['valor_inicial'],
+                'resumo' => $resumo,
+                'pedidos_agrupados' => $pedidosFormatados
+            ]
+        ]);
+    }
+    
     // Abrir caixa
     public function abrirCaixa() {
         // Verificar se já existe um caixa aberto
@@ -46,7 +220,11 @@ class CaixaController {
         }
         
         $usuario = Session::get("user");
-        $valorInicial = $_POST['valor_inicial'] ?? 0;
+        
+        // Obter dados do POST como JSON
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, TRUE);
+        $valorInicial = $input['valor_inicial'] ?? 0;
         
         $dados = [
             'data_abertura' => date('Y-m-d H:i:s'),
@@ -55,7 +233,7 @@ class CaixaController {
             'status' => 'aberto'
         ];
         
-        $idFechamento = $this->db->create("tb_fechamentos_caixa", $dados);
+        $idFechamento = $this->db->create($dados, "tb_fechamentos_caixa");
         
         // Registrar movimento de suprimento inicial
         if ($valorInicial > 0) {
@@ -69,7 +247,7 @@ class CaixaController {
                 'usuario' => $usuario
             ];
             
-            $this->db->create("tb_movimentos_caixa", $dadosMovimento);
+            $this->db->create($dadosMovimento, "tb_movimentos_caixa");
         }
         
         echo json_encode([
@@ -92,8 +270,12 @@ class CaixaController {
         }
         
         $usuario = Session::get("user");
-        $valor = $_POST['valor'] ?? 0;
-        $motivo = $_POST['motivo'] ?? '';
+        
+        // Obter dados do POST como JSON
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, TRUE);
+        $valor = $input['valor'] ?? 0;
+        $motivo = $input['motivo'] ?? '';
         
         $dadosMovimento = [
             'id_fechamento' => $caixaAtual['id'],
@@ -105,7 +287,7 @@ class CaixaController {
             'usuario' => $usuario
         ];
         
-        $this->db->create("tb_movimentos_caixa", $dadosMovimento);
+        $this->db->create($dadosMovimento, "tb_movimentos_caixa");
         
         echo json_encode([
             'success' => true,
@@ -126,8 +308,12 @@ class CaixaController {
         }
         
         $usuario = Session::get("user");
-        $valor = $_POST['valor'] ?? 0;
-        $descricao = $_POST['descricao'] ?? '';
+        
+        // Obter dados do POST como JSON
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, TRUE);
+        $valor = $input['valor'] ?? 0;
+        $descricao = $input['descricao'] ?? '';
         
         $dadosMovimento = [
             'id_fechamento' => $caixaAtual['id'],
@@ -139,7 +325,7 @@ class CaixaController {
             'usuario' => $usuario
         ];
         
-        $this->db->create("tb_movimentos_caixa", $dadosMovimento);
+        $this->db->create($dadosMovimento, "tb_movimentos_caixa");
         
         echo json_encode([
             'success' => true,
@@ -160,9 +346,23 @@ class CaixaController {
         }
         
         $usuario = Session::get("user");
-        $valorDinheiro = $_POST['valorDinheiro'] ?? 0;
-        $valorCartoes = $_POST['valorCartoes'] ?? 0;
-        $observacao = $_POST['observacao'] ?? '';
+        
+        // Obter dados do POST como JSON
+        $inputJSON = file_get_contents('php://input');
+        $input = json_decode($inputJSON, TRUE);
+        
+        $valoresConferencia = $input['valores_conferencia'] ?? [];
+        $valorDinheiro = $valoresConferencia['dinheiro'] ?? 0;
+        
+        $observacoes = $input['observacoes'] ?? '';
+        
+        // Atualizar movimentos se necessário
+        if (isset($input['movimentos'])) {
+            $movimentos = $input['movimentos'];
+            
+            // Atualizar os valores de suprimentos, sangrias e cancelamentos se necessário
+            // Esta função poderia atualizar os valores na tabela de movimentos se necessário
+        }
         
         // Calcular valor esperado
         $movimentos = $this->db->read(
@@ -174,19 +374,50 @@ class CaixaController {
         $valorEsperado = $caixaAtual['valor_inicial'];
         
         foreach ($movimentos as $movimento) {
-            if ($movimento['tipo'] == 'venda' && $movimento['metodo_pagamento'] == 'dinheiro') {
-                $valorEsperado += $movimento['valor'];
+            if ($movimento['tipo'] == 'venda') {
+                if ($movimento['metodo_pagamento'] == 'dinheiro') {
+                    // Incluir todas as vendas em dinheiro (pedidos e materiais)
+                    $valorEsperado += floatval($movimento['valor']);
+                }
             } else if ($movimento['tipo'] == 'sangria') {
-                $valorEsperado -= $movimento['valor'];
+                $valorEsperado -= floatval($movimento['valor']);
             } else if ($movimento['tipo'] == 'suprimento') {
-                $valorEsperado += $movimento['valor'];
+                $valorEsperado += floatval($movimento['valor']);
             } else if ($movimento['tipo'] == 'cancelamento' && $movimento['metodo_pagamento'] == 'dinheiro') {
-                $valorEsperado -= $movimento['valor'];
+                $valorEsperado -= floatval($movimento['valor']);
             }
         }
         
         $valorFinal = $valorDinheiro;
         $diferenca = $valorFinal - $valorEsperado;
+        
+        // Obter pedidos não entregues ou não pagos
+        $pedidosPendentes = $this->db->read(
+            "tb_pedidos", 
+            ["*"], 
+            "status != 'entregue' OR pago = 0"
+        );
+        
+        // Agrupar pedidos pendentes por dia
+        $pedidosPendentesAgrupados = [];
+        foreach ($pedidosPendentes as $pedido) {
+            // Extrair data do pedido
+            $dataPedido = isset($pedido['data_hora']) ? $pedido['data_hora'] : $pedido['created_at'];
+            $dia = date('Y-m-d', strtotime($dataPedido));
+            
+            if (!isset($pedidosPendentesAgrupados[$dia])) {
+                $pedidosPendentesAgrupados[$dia] = [
+                    'data' => $dia,
+                    'formatted_date' => date('d/m/Y', strtotime($dataPedido)),
+                    'pedidos' => []
+                ];
+            }
+            
+            $pedidosPendentesAgrupados[$dia]['pedidos'][] = $pedido;
+        }
+        
+        // Converter para array indexado para JSON
+        $pedidosPendentesFormatados = array_values($pedidosPendentesAgrupados);
         
         // Atualizar o registro de fechamento
         $dadosAtualizacao = [
@@ -195,20 +426,29 @@ class CaixaController {
             'valor_final' => $valorFinal,
             'valor_esperado' => $valorEsperado,
             'diferenca' => $diferenca,
-            'observacao' => $observacao,
+            'observacao' => $observacoes,
             'status' => 'fechado'
         ];
         
         $this->db->update(
+            $dadosAtualizacao,
             "tb_fechamentos_caixa", 
-            $dadosAtualizacao, 
             "id = " . $caixaAtual['id']
+        );
+        
+        // NOVO: Marcar todos os pedidos entregues e pagos com o ID do fechamento atual
+        // Isso permitirá escondê-los da visualização principal após o fechamento
+        $this->db->update(
+            ["fechamento_caixa_id" => $caixaAtual['id']],
+            "tb_pedidos",
+            "status = 'entregue' AND pago = 1 AND (fechamento_caixa_id IS NULL OR fechamento_caixa_id = 0)"
         );
         
         echo json_encode([
             'success' => true,
             'message' => 'Caixa fechado com sucesso!',
-            'id_fechamento' => $caixaAtual['id']
+            'id_fechamento' => $caixaAtual['id'],
+            'pedidos_pendentes' => $pedidosPendentesFormatados
         ]);
     }
     
